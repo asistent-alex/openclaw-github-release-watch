@@ -61,7 +61,8 @@ def test_render_digest_contains_key_sections():
     out = render(TEST_DIGEST)
     assert 'Test Digest' in out
     assert 'Firma de AI' in out
-    assert 'GitHub Releases Digest' in out
+    assert 'Built by' in out
+    assert 'GitHub Release Watch Digest' in out
     assert 'Highlights' in out
     assert 'Repository Status' in out
     assert 'owner/repo' in out
@@ -75,12 +76,14 @@ def test_render_digest_contains_key_sections():
     assert 'Security advisories: 1' in out
     assert 'firmade.it' in out
     assert 'firmade.ai' in out
+    assert 'openclaw-github-release-watch' in out
     assert '#1d4ed8' in out or '#38bdf8' in out
 
 
 def test_render_empty_digest_has_stable_message():
     out = render(EMPTY_DIGEST)
     assert 'Empty Digest' in out
+    assert 'GitHub Release Watch Digest' in out
     assert 'No tracked repositories yet.' in out or 'No new releases were detected' in out
     assert '#134e4a' in out or '#5eead4' in out
 
