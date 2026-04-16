@@ -1,5 +1,5 @@
 """
-GitHub checker configuration helpers for MSP module.
+GitHub Release Watch configuration helpers.
 """
 
 import json

@@ -16,7 +16,7 @@ Focused GitHub release monitoring and digest generation for OpenClaw.
 
 ## Current positioning
 
-GitHub Release Watch is the extracted product core from the GitHub release-monitoring component previously living inside `openclaw-msp`.
+GitHub Release Watch is a focused product for high-signal GitHub release monitoring, digest generation, and upgrade awareness.
 
 ## Naming convention
 
