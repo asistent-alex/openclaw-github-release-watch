@@ -50,6 +50,58 @@ def _status_colors(status: str) -> tuple[str, str, str]:
     return ("Unchanged", TABLE_ROW, MUTED)
 
 
+def _semver_badge(change: Any) -> str:
+    mapping = {
+        "major": ("Major", "#fee2e2", "#991b1b"),
+        "minor": ("Minor", "#dbeafe", "#1d4ed8"),
+        "patch": ("Patch", "#dcfce7", "#166534"),
+        "non-semver": ("Non-semver", "#f3e8ff", "#7e22ce"),
+        "same": ("Same", "#e5e7eb", "#4b5563"),
+    }
+    label, bg, fg = mapping.get(str(change or ""), (None, None, None))
+    if not label:
+        return ""
+    return (
+        f'<span style="display:inline-block;margin-left:8px;padding:2px 8px;'
+        f'background:{bg};color:{fg};font-size:11px;line-height:16px;font-weight:bold;'
+        f'border:1px solid {bg};border-radius:999px;">{_esc(label)}</span>'
+    )
+
+
+def _notes_excerpt_html(item: dict[str, Any]) -> str:
+    excerpt = item.get("release_notes_excerpt") or ""
+    if not excerpt:
+        return ""
+    return f'<div style="font-size:12px;color:{TEXT};margin-top:6px;">{_esc(excerpt)}</div>'
+
+
+def _repo_context_html(item: dict[str, Any]) -> str:
+    bits = []
+    stars = item.get("stars")
+    forks = item.get("forks")
+    stars_delta = item.get("stars_delta")
+    forks_delta = item.get("forks_delta")
+    advisories_count = item.get("advisories_count")
+    has_advisories = item.get("has_security_advisories")
+
+    if stars is not None:
+        star_text = f'★ {stars}'
+        if stars_delta not in (None, 0):
+            star_text += f' ({stars_delta:+d})'
+        bits.append(star_text)
+    if forks is not None:
+        fork_text = f'⑂ {forks}'
+        if forks_delta not in (None, 0):
+            fork_text += f' ({forks_delta:+d})'
+        bits.append(fork_text)
+    if has_advisories:
+        bits.append(f'⚠ Security advisories: {advisories_count}')
+
+    if not bits:
+        return ""
+    return f'<div style="font-size:12px;color:{MUTED};margin-top:6px;">{_esc(" • ".join(bits))}</div>'
+
+
 def _published_label(value: str | None) -> str:
     if not value:
         return "—"
@@ -92,10 +144,14 @@ def _render_highlights(results: list[dict[str, Any]]) -> str:
         desc = _esc(item.get("description") or "")
         label, bg, fg = _status_colors(status)
 
+        semver_html = _semver_badge(item.get("semver_change"))
+        notes_html = _notes_excerpt_html(item)
+        context_html = _repo_context_html(item)
+
         if status == "updated":
-            summary = f'{previous} → {latest}'
+            summary = f'{previous} → {latest}{semver_html}'
         elif status == "first_seen":
-            summary = f'First observed at {latest}'
+            summary = f'First observed at {latest}{semver_html}'
         elif status == "error":
             summary = error or 'Unknown error'
         else:
@@ -110,6 +166,8 @@ def _render_highlights(results: list[dict[str, Any]]) -> str:
             f'<div style="font-size:15px;line-height:22px;font-weight:bold;color:{DARK};">{repo}</div>'
             f'<div style="font-size:13px;line-height:20px;color:{TEXT};margin-top:4px;">{summary}{link_html}</div>'
             f'{f"<div style=\"font-size:12px;color:{MUTED};margin-top:6px;\">{desc}</div>" if desc else ""}'
+            f'{context_html}'
+            f'{notes_html}'
             '</td>'
             f'<td width="110" valign="top" align="right" style="padding:14px 16px;">'
             f'<span style="display:inline-block;padding:4px 10px;border:1px solid {bg};background:{bg};color:{fg};font-size:12px;line-height:16px;font-weight:bold;">{_esc(label)}</span>'
@@ -181,7 +239,7 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
                 elif days_since is not None:
                     days_html = f'{days_since} / -'
                 elif avg is not None:
-                    days_html = '- / {avg}'
+                    days_html = f'- / {avg}'
                 else:
                     days_html = ' - '
                 label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
@@ -189,10 +247,14 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
                 repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;">{repo}</a>' if link else repo
                 desc = item.get("description") or ''
                 desc_html = f'<div style="font-size:12px;color:{MUTED};margin-top:6px;">{_esc(desc)}</div>' if desc else ''
+                notes_html = _notes_excerpt_html(item)
+                context_html = _repo_context_html(item)
+                semver_html = _semver_badge(item.get("semver_change"))
+                latest_html = f'{latest}{semver_html}'
                 rows.append(
                     '<tr>'
-                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}</td>'
-                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest}</td>'
+                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}{notes_html}</td>'
+                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest_html}</td>'
                     f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
                     f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
                     '</tr>'
@@ -243,9 +305,10 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
             repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;">{repo}</a>' if link else repo
             desc = item.get("description") or ''
             desc_html = f'<div style="font-size:12px;color:{MUTED};margin-top:6px;">{_esc(desc)}</div>' if desc else ''
+            context_html = _repo_context_html(item)
             rows.append(
                 '<tr>'
-                f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}</td>'
+                f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}</td>'
                 f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest}</td>'
                 f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
                 f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
@@ -301,10 +364,14 @@ def _render_table(results: list[dict[str, Any]]) -> str:
         repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;">{repo}</a>' if link else repo
         desc = item.get("description") or ''
         desc_html = f'<div style="font-size:12px;color:{MUTED};margin-top:6px;">{_esc(desc)}</div>' if desc else ''
+        notes_html = _notes_excerpt_html(item)
+        context_html = _repo_context_html(item)
+        semver_html = _semver_badge(item.get("semver_change"))
+        latest_html = f'{latest}{semver_html}'
         rows.append(
             '<tr>'
-            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}</td>'
-            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest}</td>'
+            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}{notes_html}</td>'
+            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest_html}</td>'
             f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
             f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
             '</tr>'

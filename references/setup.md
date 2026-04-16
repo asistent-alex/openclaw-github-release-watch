@@ -27,6 +27,14 @@ Use either:
 - `GITHUB_RELEASE_WATCH_REPOS` env override
 - `GITHUB_RELEASE_WATCH_RECIPIENT` env var for digest recipient
 
+The config may also define `categories` to group repositories inside the rendered digest.
+
+Tracked state stores release metadata plus derived context such as:
+- semantic version change type
+- release-notes excerpt
+- stars / forks counts and deltas
+- security advisory presence signal
+
 ## Notes
 
 Do not commit live state or private local config.

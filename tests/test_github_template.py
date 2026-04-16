@@ -25,6 +25,14 @@ TEST_DIGEST = {
             "latest_tag": "v1.0.0",
             "html_url": "https://example.com/releases/tag/v1.0.0",
             "published_at": "2026-04-09T01:00:00Z",
+            "semver_change": "minor",
+            "release_notes_excerpt": "Added smarter sync • Fixed rendering",
+            "stars": 120,
+            "stars_delta": 5,
+            "forks": 18,
+            "forks_delta": 2,
+            "has_security_advisories": True,
+            "advisories_count": 1,
         },
     ],
     "updates": 1,
@@ -60,6 +68,11 @@ def test_render_digest_contains_key_sections():
     assert 'owner/updated' in out
     assert 'First seen' in out or 'first seen' in out
     assert 'Updated' in out
+    assert 'Minor' in out
+    assert 'Added smarter sync' in out
+    assert '★ 120 (+5)' in out
+    assert '⑂ 18 (+2)' in out
+    assert 'Security advisories: 1' in out
     assert 'firmade.it' in out
     assert 'firmade.ai' in out
     assert '#1d4ed8' in out or '#38bdf8' in out
