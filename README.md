@@ -33,6 +33,29 @@ GitHub Release Watch is a focused product for high-signal GitHub release monitor
 - security advisory presence signal
 - categorized HTML digest rendering
 
+## Dependencies
+
+### Required
+
+- **Python 3** — used by the CLI and renderer
+- **GitHub access** — public repos work anonymously, but authenticated use is strongly recommended for better rate limits
+- **`GITHUB_TOKEN`** or `~/.openclaw/openclaw.json` with `env.GITHUB_TOKEN` — recommended for reliable GitHub API access
+
+### Required for email delivery
+
+- **IMM-Romania skill** installed locally
+- default expected path: `~/.openclaw/skills/imm-romania`
+- override path: `IMM_ROMANIA_PATH`
+- required entrypoint: `scripts/imm-romania.py`
+
+Without IMM-Romania, the checker and digest renderer still work, but the email wrapper will not send mail.
+
+### Config / runtime files
+
+- config default: `data/github-release-watch-repos.json`
+- example config: `data/github-release-watch-repos.example.json`
+- state default: `data/github-release-watch-state.json`
+
 ## Quick start
 
 ```bash
