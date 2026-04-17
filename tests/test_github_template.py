@@ -68,6 +68,9 @@ def test_render_digest_contains_key_sections():
     assert 'Firma de AI' in out
     assert 'Built by' in out
     assert 'GitHub Release Watch Digest' in out
+    assert 'height:3px' in out
+    assert 'Executive Dashboard' not in out
+    assert 'Recommended action:' not in out
     assert 'Highlights' in out
     assert 'Repository Status' in out
     assert 'owner/repo' in out
@@ -92,6 +95,8 @@ def test_render_empty_digest_has_stable_message():
     out = render(EMPTY_DIGEST)
     assert 'Empty Digest' in out
     assert 'GitHub Release Watch Digest' in out
+    assert 'Executive Dashboard' not in out
+    assert 'No immediate action required' not in out
     assert 'No tracked repositories yet.' in out or 'No new releases were detected' in out
     assert '#134e4a' in out or '#5eead4' in out
 
