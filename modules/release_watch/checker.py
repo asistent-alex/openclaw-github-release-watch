@@ -25,7 +25,39 @@ USER_AGENT = "openclaw-github-release-watch"
 NO_CONFIG_MESSAGE = "No GitHub repositories configured"
 RELEASE_NOTES_MAX_LINES = 3
 RELEASE_NOTES_MAX_CHARS = 280
+REPO_HISTORY_MAX_ITEMS = 12
 SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
+ATTENTION_KEYWORD_GROUPS = {
+    "breaking": [
+        "breaking",
+        "breaking change",
+        "breaking changes",
+        "removed",
+        "removal",
+        "incompatible",
+    ],
+    "deprecation": [
+        "deprecat",
+        "sunset",
+        "end of life",
+        "eol",
+        "legacy",
+    ],
+    "security": [
+        "security",
+        "vulnerability",
+        "cve",
+        "ghsa",
+        "exploit",
+        "advisory",
+    ],
+    "migration": [
+        "migration",
+        "migrate",
+        "upgrade guide",
+        "upgrade notes",
+    ],
+}
 
 
 def _build_logger() -> logging.Logger:
@@ -405,6 +437,163 @@ class GitHubReleaseChecker:
         except Exception:
             return None
 
+    def _keyword_flags(self, text: str) -> Dict[str, bool]:
+        lowered = text.lower()
+        return {
+            name: any(keyword in lowered for keyword in keywords)
+            for name, keywords in ATTENTION_KEYWORD_GROUPS.items()
+        }
+
+    def _release_attention(self, repo_state: Dict[str, Any]) -> Dict[str, Any]:
+        score = 0
+        reasons: List[str] = []
+        semver_change = repo_state.get("semver_change")
+        keyword_flags = self._keyword_flags(
+            " ".join(
+                filter(
+                    None,
+                    [
+                        str(repo_state.get("name") or ""),
+                        str(repo_state.get("release_notes_excerpt") or ""),
+                    ],
+                )
+            )
+        )
+
+        if semver_change == "major":
+            score += 3
+            reasons.append("major version change")
+        elif semver_change == "minor":
+            score += 2
+            reasons.append("minor version change")
+        elif semver_change == "patch":
+            score += 1
+            reasons.append("patch version change")
+
+        if keyword_flags.get("breaking"):
+            score += 3
+            reasons.append("breaking-change language detected")
+        if keyword_flags.get("deprecation"):
+            score += 2
+            reasons.append("deprecation language detected")
+        if keyword_flags.get("security"):
+            score += 2
+            reasons.append("security language detected")
+        if repo_state.get("has_security_advisories"):
+            score += 3
+            reasons.append("security advisories present")
+        if keyword_flags.get("migration"):
+            score += 1
+            reasons.append("migration guidance language detected")
+
+        if repo_state.get("status") == "first_seen" and score == 0:
+            score = 1
+            reasons.append("first observed release")
+
+        if score >= 6:
+            attention = "high"
+            action = "review before upgrade"
+        elif score >= 3:
+            attention = "medium"
+            action = "watch closely"
+        else:
+            attention = "low"
+            action = "ignore for now"
+
+        priority_order = {
+            "security advisories present": 0,
+            "breaking-change language detected": 1,
+            "major version change": 2,
+            "deprecation language detected": 3,
+            "security language detected": 4,
+            "migration guidance language detected": 5,
+            "minor version change": 6,
+            "patch version change": 7,
+            "first observed release": 8,
+        }
+        reasons = sorted(reasons, key=lambda value: priority_order.get(value, 99))
+
+        return {
+            "release_attention": attention,
+            "release_attention_score": score,
+            "release_attention_reasons": reasons[:3],
+            "release_attention_action": action,
+            "release_attention_flags": keyword_flags,
+        }
+
+    def _history_event(self, repo_state: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "checked_at": repo_state.get("last_checked"),
+            "published_at": repo_state.get("published_at"),
+            "status": repo_state.get("status"),
+            "latest_tag": repo_state.get("latest_tag"),
+            "semver_change": repo_state.get("semver_change"),
+            "release_attention": repo_state.get("release_attention"),
+            "release_attention_score": repo_state.get("release_attention_score"),
+        }
+
+    def _updated_history(self, previous: Dict[str, Any], repo_state: Dict[str, Any]) -> List[Dict[str, Any]]:
+        history = previous.get("history", [])
+        if not isinstance(history, list):
+            history = []
+        event = self._history_event(repo_state)
+        last_event = history[-1] if history else None
+        if not isinstance(last_event, dict) or last_event.get("latest_tag") != event.get("latest_tag"):
+            history = history + [event]
+        else:
+            history = history[:-1] + [event]
+        return history[-REPO_HISTORY_MAX_ITEMS:]
+
+    def _repo_trend(self, history: List[Dict[str, Any]]) -> Dict[str, Any]:
+        if len(history) < 3:
+            return {"repo_trend": "new", "repo_trend_reason": "not enough history yet"}
+
+        valid_dates = [
+            self._parse_iso_datetime(item.get("published_at"))
+            for item in history
+            if isinstance(item, dict)
+        ]
+        valid_dates = [value for value in valid_dates if value is not None]
+        intervals: List[float] = []
+        for index in range(1, len(valid_dates)):
+            delta = (valid_dates[index] - valid_dates[index - 1]).total_seconds() / 86400.0
+            if delta >= 0:
+                intervals.append(delta)
+
+        recent_semvers = [
+            item.get("semver_change")
+            for item in history[-5:]
+            if isinstance(item, dict)
+        ]
+        recent_attention = [
+            item.get("release_attention_score")
+            for item in history[-5:]
+            if isinstance(item, dict) and isinstance(item.get("release_attention_score"), int)
+        ]
+
+        major_count = sum(1 for value in recent_semvers if value == "major")
+        high_attention_count = sum(1 for value in recent_attention if value >= 6)
+        if major_count >= 2 or high_attention_count >= 2:
+            return {"repo_trend": "volatile", "repo_trend_reason": "multiple high-impact releases recently"}
+
+        minor_patch_count = sum(1 for value in recent_semvers if value in {"minor", "patch"})
+        if minor_patch_count >= 4:
+            return {"repo_trend": "noisy", "repo_trend_reason": "many low-impact releases recently"}
+
+        if len(intervals) >= 3:
+            recent = intervals[-2:]
+            previous = intervals[:-2]
+            recent_avg = sum(recent) / len(recent)
+            previous_avg = sum(previous) / len(previous) if previous else recent_avg
+            if recent_avg < previous_avg * 0.7:
+                return {"repo_trend": "accelerating", "repo_trend_reason": "release cadence is speeding up"}
+            if recent_avg > previous_avg * 1.3:
+                return {"repo_trend": "slowing", "repo_trend_reason": "release cadence is slowing down"}
+            if len(intervals) >= 4 and max(intervals[-4:]) - min(intervals[-4:]) <= 7:
+                return {"repo_trend": "stable", "repo_trend_reason": "release cadence looks consistent"}
+
+        return {"repo_trend": "stable", "repo_trend_reason": "history does not indicate unusual movement"}
+
     def _finalize_repo_result(
         self,
         repo: str,
@@ -446,6 +635,10 @@ class GitHubReleaseChecker:
                 extras.append(f"stars={item.get('stars_delta'):+d}")
             if item.get("forks_delta") not in (None, 0):
                 extras.append(f"forks={item.get('forks_delta'):+d}")
+            if item.get("release_attention"):
+                extras.append(f"attention={item.get('release_attention')}")
+            if item.get("repo_trend"):
+                extras.append(f"trend={item.get('repo_trend')}")
             suffix = f" [{', '.join(extras)}]" if extras else ""
             if status == "updated":
                 lines.append(
@@ -504,6 +697,9 @@ class GitHubReleaseChecker:
             )
             repo_state.update(self._safe_repo_context(repo, previous))
             repo_state.update(self._safe_release_metrics(repo_state, repo))
+            repo_state.update(self._release_attention(repo_state))
+            repo_state["history"] = self._updated_history(previous, repo_state)
+            repo_state.update(self._repo_trend(repo_state["history"]))
 
             state["repos"][repo] = repo_state
             results.append(
@@ -579,6 +775,10 @@ class GitHubReleaseChecker:
             "categories": snapshot.get("categories", []),
             "failures": snapshot.get("failures", 0),
             "updates": snapshot.get("updates", 0),
+            "top_attention": [
+                item for item in snapshot.get("results", [])
+                if item.get("release_attention") in {"high", "medium"}
+            ],
         }
 
     def get_status_snapshot(self) -> Dict[str, Any]:

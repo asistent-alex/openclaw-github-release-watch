@@ -495,6 +495,144 @@ class TestGitHubReleaseChecker(unittest.TestCase):
         self.assertTrue(item["has_security_advisories"])
         self.assertEqual(item["advisories_count"], 2)
 
+    def test_release_attention_scores_high_for_breaking_major_security_release(self):
+        self.write_config(["owner/repo"])
+        first = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v1.2.0",
+                    "name": "v1.2.0",
+                    "published_at": "2026-04-09T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v1.2.0",
+                    "body": "Routine release",
+                    "prerelease": False,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        first.check_repos()
+
+        second = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v2.0.0",
+                    "name": "v2.0.0",
+                    "published_at": "2026-04-10T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v2.0.0",
+                    "body": "Breaking change. Migration guide included. Security fix for GHSA-123.",
+                    "prerelease": False,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            advisories={"owner/repo": [{"ghsa_id": "GHSA-1234-5678-9012"}]},
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        result = second.check_repos()
+        item = result["results"][0]
+        self.assertEqual(item["release_attention"], "high")
+        self.assertIn("major version change", item["release_attention_reasons"])
+        self.assertIn("security advisories present", item["release_attention_reasons"])
+        self.assertEqual(item["release_attention_action"], "review before upgrade")
+
+    def test_repo_trend_uses_bounded_history_and_accelerating_label(self):
+        self.write_config(["owner/repo"])
+        checker = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v1.6.0",
+                    "name": "v1.6.0",
+                    "published_at": "2026-04-30T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v1.6.0",
+                    "body": "Minor release",
+                    "prerelease": False,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        with open(self.state_path, "w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "schema_version": "1.0.0",
+                    "repos": {
+                        "owner/repo": {
+                            "latest_tag": "v1.5.0",
+                            "history": [
+                                {"published_at": "2026-01-01T00:00:00Z", "latest_tag": "v1.0.0", "release_attention_score": 1},
+                                {"published_at": "2026-02-10T00:00:00Z", "latest_tag": "v1.1.0", "release_attention_score": 1},
+                                {"published_at": "2026-03-20T00:00:00Z", "latest_tag": "v1.2.0", "release_attention_score": 2},
+                                {"published_at": "2026-04-10T00:00:00Z", "latest_tag": "v1.3.0", "release_attention_score": 2},
+                                {"published_at": "2026-04-20T00:00:00Z", "latest_tag": "v1.4.0", "release_attention_score": 2},
+                                {"published_at": "2026-04-25T00:00:00Z", "latest_tag": "v1.5.0", "release_attention_score": 2}
+                            ]
+                        }
+                    }
+                },
+                handle,
+            )
+
+        result = checker.check_repos()
+        item = result["results"][0]
+        self.assertEqual(item["repo_trend"], "accelerating")
+        self.assertEqual(len(item["history"]), 7)
+
+    def test_repo_trend_marks_noisy_with_many_low_impact_releases(self):
+        self.write_config(["owner/repo"])
+        checker = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v1.5.0",
+                    "name": "v1.5.0",
+                    "published_at": "2026-05-01T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v1.5.0",
+                    "body": "Patch cleanup",
+                    "prerelease": False,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        with open(self.state_path, "w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "schema_version": "1.0.0",
+                    "repos": {
+                        "owner/repo": {
+                            "latest_tag": "v1.4.0",
+                            "history": [
+                                {"published_at": "2026-04-01T00:00:00Z", "latest_tag": "v1.0.0", "semver_change": "minor", "release_attention_score": 1},
+                                {"published_at": "2026-04-06T00:00:00Z", "latest_tag": "v1.1.0", "semver_change": "patch", "release_attention_score": 1},
+                                {"published_at": "2026-04-11T00:00:00Z", "latest_tag": "v1.2.0", "semver_change": "patch", "release_attention_score": 1},
+                                {"published_at": "2026-04-16T00:00:00Z", "latest_tag": "v1.3.0", "semver_change": "minor", "release_attention_score": 2},
+                                {"published_at": "2026-04-21T00:00:00Z", "latest_tag": "v1.4.0", "semver_change": "patch", "release_attention_score": 1}
+                            ]
+                        }
+                    }
+                },
+                handle,
+            )
+
+        result = checker.check_repos()
+        item = result["results"][0]
+        self.assertEqual(item["repo_trend"], "noisy")
+
 
 if __name__ == "__main__":
     unittest.main()
