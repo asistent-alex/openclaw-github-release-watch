@@ -474,13 +474,16 @@ def render_html(data: dict[str, Any]) -> str:
         '<table role="presentation" width="760" cellspacing="0" cellpadding="0" border="0" style="width:760px;max-width:760px;background:%s;border:1px solid %s;">' % (CARD, BORDER),
         '<tr><td style="background:%s;padding:24px 28px;color:#ffffff;border-bottom:4px solid %s;">' % (hero_bg, hero_accent),
         '<div style="font-size:12px;line-height:18px;letter-spacing:0.14em;text-transform:uppercase;opacity:0.88;">Built by <a href="https://firmade.ai" style="color:#ffffff;text-decoration:none;font-weight:700;">Firma de AI</a>, supported by <a href="https://firmade.it" style="color:#ffffff;text-decoration:none;font-weight:700;">Firma de IT</a>.</div>',
-        '<div style="font-size:30px;line-height:36px;font-weight:bold;margin-top:10px;">GitHub Release Watch Digest</div>',
+        '<table role="presentation" width="100%%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;margin-top:12px;">'
+        '<tr><td style="font-size:0;line-height:0;height:3px;background:%s;">&nbsp;</td></tr>'
+        '</table>' % hero_accent,
+        '<div style="font-size:30px;line-height:36px;font-weight:bold;margin-top:12px;">GitHub Release Watch Digest</div>',
         '<div style="font-size:16px;line-height:24px;font-weight:600;opacity:0.96;margin-top:10px;">%s</div>' % _esc(subject),
         '<div style="font-size:14px;line-height:22px;opacity:0.90;margin-top:10px;">%s</div>' % _esc(intro),
         '<div style="font-size:12px;line-height:18px;opacity:0.78;margin-top:10px;">Generated: %s</div>' % _esc(timestamp),
         '</td></tr>',
         '<tr><td style="padding:24px 28px;">',
-        '<table role="presentation" width="100%%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;margin-bottom:18px;">',
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;margin-bottom:18px;">',
         '<tr>',
         _summary_card('Tracked repos', monitored, CARD, DARK),
         _summary_card('Updates', updates, updates_bg if updates or not failures else CARD, updates_fg if updates or not failures else DARK),
