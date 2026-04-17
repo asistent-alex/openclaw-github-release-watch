@@ -175,8 +175,65 @@ class TestGitHubReleaseChecker(unittest.TestCase):
         checker.check_repos()
         digest = checker.generate_digest(check_first=False)
         self.assertTrue(digest["ok"])
+        self.assertEqual(digest["subject"], "GitHub Release Watch — No new releases today")
         self.assertIn("GitHub Releases Monitor", digest["body"])
         self.assertIn("owner/repo", digest["body"])
+
+    def test_digest_subject_uses_release_count_when_updates_exist(self):
+        self.write_config(["owner/repo"])
+        first = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v1.0.0",
+                    "name": "v1.0.0",
+                    "published_at": "2026-04-09T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
+                    "prerelease": False,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        first.check_repos()
+
+        second = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v1.1.0",
+                    "name": "v1.1.0",
+                    "published_at": "2026-04-10T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v1.1.0",
+                    "prerelease": False,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        second.check_repos()
+
+        digest = second.generate_digest(check_first=False)
+        self.assertEqual(digest["subject"], "🆕 GitHub Release Watch — 1 new release")
+
+    def test_digest_subject_handles_no_config(self):
+        checker = GitHubReleaseChecker(
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        digest = checker.generate_digest(check_first=False)
+        self.assertTrue(digest["ok"])
+        self.assertEqual(
+            digest["subject"],
+            "GitHub Release Watch — No repositories configured",
+        )
 
     def test_repo_override_enables_checker(self):
         checker = FakeChecker(

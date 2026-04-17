@@ -755,17 +755,18 @@ class GitHubReleaseChecker:
             return {
                 "ok": True,
                 "has_updates": False,
-                "subject": "GitHub Releases - No repos configured",
+                "subject": "GitHub Release Watch — No repositories configured",
                 "body": NO_CONFIG_MESSAGE + ".",
                 "results": [],
                 "categories": [],
             }
 
-        subject = (
-            f"🆕 GitHub Releases - {snapshot.get('updates', 0)} update(s)"
-            if snapshot.get("updates", 0) > 0
-            else "GitHub Releases Daily Digest"
-        )
+        updates = snapshot.get("updates", 0)
+        if updates > 0:
+            release_label = "new release" if updates == 1 else "new releases"
+            subject = f"🆕 GitHub Release Watch — {updates} {release_label}"
+        else:
+            subject = "GitHub Release Watch — No new releases today"
         return {
             "ok": True,
             "has_updates": snapshot.get("updates", 0) > 0,
