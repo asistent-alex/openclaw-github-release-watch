@@ -33,6 +33,11 @@ TEST_DIGEST = {
             "forks_delta": 2,
             "has_security_advisories": True,
             "advisories_count": 1,
+            "release_attention": "high",
+            "release_attention_reasons": ["major version change", "security advisories present"],
+            "release_attention_action": "review before upgrade",
+            "repo_trend": "accelerating",
+            "repo_trend_reason": "release cadence is speeding up",
         },
     ],
     "updates": 1,
@@ -74,6 +79,9 @@ def test_render_digest_contains_key_sections():
     assert '★ 120 (+5)' in out
     assert '⑂ 18 (+2)' in out
     assert 'Security advisories: 1' in out
+    assert 'Release Attention: High' in out
+    assert 'Repo Trend:' in out
+    assert 'Accelerating' in out
     assert 'firmade.it' in out
     assert 'firmade.ai' in out
     assert 'openclaw-github-release-watch' in out
