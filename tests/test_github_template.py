@@ -64,10 +64,12 @@ def render(payload: dict) -> str:
 
 def test_render_digest_contains_key_sections():
     out = render(TEST_DIGEST)
-    assert 'Test Digest' in out
+    # Dynamic subject includes repo short names + update count
+    assert 'repo' in out or 'updated' in out  # dynamic subject has repo names
+    assert '1 update across 2 tracked repos' in out
     assert 'Firma de AI' in out
     assert 'Built by' in out
-    assert 'GitHub Release Watch Digest' in out
+    assert 'GitHub Release Watch' in out
     assert 'height:3px' in out
     assert 'Executive Dashboard' not in out
     assert 'Recommended action:' not in out
@@ -93,8 +95,9 @@ def test_render_digest_contains_key_sections():
 
 def test_render_empty_digest_has_stable_message():
     out = render(EMPTY_DIGEST)
-    assert 'Empty Digest' in out
-    assert 'GitHub Release Watch Digest' in out
+    # Dynamic subject: no updates → "No new releases — 0 tracked repos stable"
+    assert 'No new releases' in out
+    assert 'GitHub Release Watch' in out
     assert 'Executive Dashboard' not in out
     assert 'No immediate action required' not in out
     assert 'No tracked repositories yet.' in out or 'No new releases were detected' in out
