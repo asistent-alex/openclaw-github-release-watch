@@ -19,6 +19,13 @@ TEXT = "#1f2937"
 MUTED = "#64748b"
 DARK = "#0f172a"
 ACCENT = "#0ea5e9"
+
+# Heading sizes
+H1 = 36
+H2 = 16
+H3 = 16
+H4 = 12
+H5 = 12
 SUCCESS_BG = "#ecfdf5"
 SUCCESS_TEXT = "#166534"
 INFO_BG = "#eff6ff"
@@ -103,7 +110,7 @@ def _repo_trend_html(item: dict[str, Any]) -> str:
         return ""
     reason = item.get("repo_trend_reason") or ""
     return (
-        f'<div style="font-size:12px;color:{MUTED};margin-top:6px;">'
+        f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">'
         f'<strong>Repo Trend:</strong> {_esc(str(trend).title())}'
         f'{f" — {_esc(reason)}" if reason else ""}'
         f'</div>'
@@ -134,7 +141,7 @@ def _repo_context_html(item: dict[str, Any]) -> str:
 
     if not bits:
         return ""
-    return f'<div style="font-size:12px;color:{MUTED};margin-top:6px;">{_esc(" • ".join(bits))}</div>'
+    return f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(" • ".join(bits))}</div>'
 
 
 def _published_label(value: str | None) -> str:
@@ -194,16 +201,17 @@ def _render_highlights(results: list[dict[str, Any]]) -> str:
         else:
             summary = latest
 
+        repo_link_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;">{repo}</a>' if link else repo
         link_html = f' &nbsp;·&nbsp; <a href="{link}" style="color:{ACCENT};text-decoration:none;">View release</a>' if link else ''
         rows.append(
             '<tr><td style="padding:0 0 10px 0;">'
             f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
             '<tr>'
             f'<td valign="top" style="padding:14px 16px;">'
-            f'<div style="font-size:15px;line-height:22px;font-weight:bold;color:{DARK};">{repo}</div>'
-            f'<div style="font-size:13px;line-height:20px;color:{TEXT};margin-top:4px;">{summary}{link_html}</div>'
-            f'{f"<div style=\"font-size:12px;color:{MUTED};margin-top:6px;\">{desc}</div>" if desc else ""}'
+            f'<div style="font-size:{H2}px;line-height:22px;font-weight:bold;color:{DARK};">{repo_link_html}</div>'
+            f'{f"<div style=\"font-size:{H4}px;color:{MUTED};margin-top:2px;\">{desc}</div>" if desc else ""}'
             f'{context_html}'
+            f'<div style="font-size:13px;line-height:20px;color:{TEXT};margin-top:6px;">{summary}{link_html}</div>'
             f'{attention_html}'
             f'{trend_html}'
             f'{notes_html}'
@@ -283,9 +291,9 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
                     days_html = ' - '
                 label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
                 link = _esc(item.get("html_url") or "")
-                repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;">{repo}</a>' if link else repo
+                repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:{H2}px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:{H2}px;font-weight:bold;color:{DARK};">{repo}</span>'
                 desc = item.get("description") or ''
-                desc_html = f'<div style="font-size:12px;color:{MUTED};margin-top:6px;">{_esc(desc)}</div>' if desc else ''
+                desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
                 notes_html = _notes_excerpt_html(item)
                 context_html = _repo_context_html(item)
                 attention_html = _release_attention_html(item)
@@ -343,9 +351,9 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
                 days_html = ' - '
             label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
             link = _esc(item.get("html_url") or "")
-            repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;">{repo}</a>' if link else repo
+            repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:{H2}px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:{H2}px;font-weight:bold;color:{DARK};">{repo}</span>'
             desc = item.get("description") or ''
-            desc_html = f'<div style="font-size:12px;color:{MUTED};margin-top:6px;">{_esc(desc)}</div>' if desc else ''
+            desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
             context_html = _repo_context_html(item)
             rows.append(
                 '<tr>'
@@ -402,9 +410,9 @@ def _render_table(results: list[dict[str, Any]]) -> str:
             days_html = ' - '
         label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
         link = _esc(item.get("html_url") or "")
-        repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;">{repo}</a>' if link else repo
+        repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:{H2}px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:{H2}px;font-weight:bold;color:{DARK};">{repo}</span>'
         desc = item.get("description") or ''
-        desc_html = f'<div style="font-size:12px;color:{MUTED};margin-top:6px;">{_esc(desc)}</div>' if desc else ''
+        desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
         notes_html = _notes_excerpt_html(item)
         context_html = _repo_context_html(item)
         attention_html = _release_attention_html(item)
@@ -436,12 +444,24 @@ def _render_table(results: list[dict[str, Any]]) -> str:
 
 
 def render_html(data: dict[str, Any]) -> str:
-    subject = _esc(data.get("subject") or "GitHub Release Watch")
     results = list(data.get("results") or [])
     updates = int(data.get("updates") or 0)
     failures = int(data.get("failures") or 0)
     monitored = len(results)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    # Build dynamic subject with updated repo names
+    updated_repos = [item.get("repo", "").split("/")[-1] for item in results if item.get("status") in {"updated", "first_seen"}]
+    if updated_repos:
+        # Take up to 4 repo names for the subject line
+        names = updated_repos[:4]
+        suffix = " and %d more" % (len(updated_repos) - 4) if len(updated_repos) > 4 else ""
+        subject = ", ".join(names) + suffix + " — %d update%s across %d tracked repo%s" % (
+            updates, "s" if updates != 1 else "", monitored, "s" if monitored != 1 else ""
+        )
+    else:
+        subject = "No new releases — %d tracked repo%s stable" % (monitored, "s" if monitored != 1 else "")
+
     has_updates = any(item.get("status") in {"updated", "first_seen"} for item in results)
     intro = (
         "New releases or first-seen repositories were detected in the latest monitoring cycle."
@@ -477,8 +497,8 @@ def render_html(data: dict[str, Any]) -> str:
         '<table role="presentation" width="100%%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;margin-top:12px;">'
         '<tr><td style="font-size:0;line-height:0;height:3px;background:%s;">&nbsp;</td></tr>'
         '</table>' % hero_accent,
-        '<div style="font-size:30px;line-height:36px;font-weight:bold;margin-top:12px;">GitHub Release Watch Digest</div>',
-        '<div style="font-size:16px;line-height:24px;font-weight:600;opacity:0.96;margin-top:10px;">%s</div>' % _esc(subject),
+        '<div style="font-size:%dpx;line-height:42px;font-weight:bold;margin-top:12px;">GitHub Release Watch</div>' % H1,
+        '<div style="font-size:20px;line-height:28px;font-weight:600;opacity:0.96;margin-top:8px;">%s</div>' % _esc(subject),
         '<div style="font-size:14px;line-height:22px;opacity:0.90;margin-top:10px;">%s</div>' % _esc(intro),
         '<div style="font-size:12px;line-height:18px;opacity:0.78;margin-top:10px;">Generated: %s</div>' % _esc(timestamp),
         '</td></tr>',
