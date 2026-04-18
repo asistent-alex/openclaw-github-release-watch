@@ -544,42 +544,60 @@ class GitHubReleaseChecker:
             history = history[:-1] + [event]
         return history[-REPO_HISTORY_MAX_ITEMS:]
 
-    def _repo_trend(self, history: List[Dict[str, Any]]) -> Dict[str, Any]:
-        if len(history) < 3:
-            return {"repo_trend": "new", "repo_trend_reason": "not enough history yet"}
+    def _repo_trend(self, repo: str) -> Dict[str, Any]:
+        """Compute repo trend from actual GitHub release history.
 
-        valid_dates = [
-            self._parse_iso_datetime(item.get("published_at"))
-            for item in history
-            if isinstance(item, dict)
-        ]
-        valid_dates = [value for value in valid_dates if value is not None]
+        Instead of relying on the checker's own state history (which only accumulates
+        one entry per cron run), this fetches up to 50 recent releases from GitHub
+        and computes trend from their real published_at dates and semver changes.
+        """
+        try:
+            releases = self.get_release_history(repo, per_page=50)
+        except Exception:
+            return {"repo_trend": "stable", "repo_trend_reason": "could not fetch release history"}
+
+        if not isinstance(releases, list) or len(releases) < 3:
+            return {"repo_trend": "new", "repo_trend_reason": "not enough GitHub releases yet"}
+
+        # Parse published_at dates from GitHub releases
+        valid_dates: List[datetime] = []
+        for rel in releases:
+            if not isinstance(rel, dict):
+                continue
+            pub = rel.get("published_at")
+            if pub:
+                dt = self._parse_iso_datetime(pub)
+                if dt is not None:
+                    valid_dates.append(dt)
+
+        if len(valid_dates) < 3:
+            return {"repo_trend": "new", "repo_trend_reason": "not enough dated GitHub releases"}
+
+        # Sort oldest-first for interval computation
+        valid_dates.sort()
         intervals: List[float] = []
-        for index in range(1, len(valid_dates)):
-            delta = (valid_dates[index] - valid_dates[index - 1]).total_seconds() / 86400.0
+        for i in range(1, len(valid_dates)):
+            delta = (valid_dates[i] - valid_dates[i - 1]).total_seconds() / 86400.0
             if delta >= 0:
                 intervals.append(delta)
 
-        recent_semvers = [
-            item.get("semver_change")
-            for item in history[-5:]
-            if isinstance(item, dict)
-        ]
-        recent_attention = [
-            item.get("release_attention_score")
-            for item in history[-5:]
-            if isinstance(item, dict) and isinstance(item.get("release_attention_score"), int)
-        ]
+        # Compute semver changes between consecutive tags (newest-first from API)
+        tags = [rel.get("tag_name", "") for rel in releases if isinstance(rel, dict) and rel.get("tag_name")]
+        tags_chrono = list(reversed(tags))  # oldest-first
+        semver_list = []
+        for i in range(1, len(tags_chrono)):
+            change = self._classify_semver_change(tags_chrono[i - 1], tags_chrono[i])
+            if change:
+                semver_list.append(change)
 
-        major_count = sum(1 for value in recent_semvers if value == "major")
-        high_attention_count = sum(1 for value in recent_attention if value >= 6)
-        if major_count >= 2 or high_attention_count >= 2:
-            return {"repo_trend": "volatile", "repo_trend_reason": "multiple high-impact releases recently"}
+        recent_semvers = semver_list[-5:] if semver_list else []
+        major_count = sum(1 for s in recent_semvers if s == "major")
+        minor_patch_count = sum(1 for s in recent_semvers if s in {"minor", "patch"})
 
-        minor_patch_count = sum(1 for value in recent_semvers if value in {"minor", "patch"})
-        if minor_patch_count >= 4:
-            return {"repo_trend": "noisy", "repo_trend_reason": "many low-impact releases recently"}
+        if major_count >= 2:
+            return {"repo_trend": "volatile", "repo_trend_reason": "multiple major releases recently"}
 
+        # Check cadence trends before noisy — accelerating/slowing is more informative
         if len(intervals) >= 3:
             recent = intervals[-2:]
             previous = intervals[:-2]
@@ -591,6 +609,9 @@ class GitHubReleaseChecker:
                 return {"repo_trend": "slowing", "repo_trend_reason": "release cadence is slowing down"}
             if len(intervals) >= 4 and max(intervals[-4:]) - min(intervals[-4:]) <= 7:
                 return {"repo_trend": "stable", "repo_trend_reason": "release cadence looks consistent"}
+
+        if minor_patch_count >= 4:
+            return {"repo_trend": "noisy", "repo_trend_reason": "many low-impact releases recently"}
 
         return {"repo_trend": "stable", "repo_trend_reason": "history does not indicate unusual movement"}
 
@@ -699,7 +720,7 @@ class GitHubReleaseChecker:
             repo_state.update(self._safe_release_metrics(repo_state, repo))
             repo_state.update(self._release_attention(repo_state))
             repo_state["history"] = self._updated_history(previous, repo_state)
-            repo_state.update(self._repo_trend(repo_state["history"]))
+            repo_state.update(self._repo_trend(repo))
 
             state["repos"][repo] = repo_state
             results.append(

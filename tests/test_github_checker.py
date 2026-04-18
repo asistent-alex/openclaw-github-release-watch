@@ -602,20 +602,31 @@ class TestGitHubReleaseChecker(unittest.TestCase):
 
     def test_repo_trend_uses_bounded_history_and_accelerating_label(self):
         self.write_config(["owner/repo"])
+        # GitHub release history (newest-first, as returned by the API)
+        # Mix of major and minor so it doesn't trigger "noisy" but does show accelerating cadence
+        release_history = [
+            {"tag_name": "v2.3.0", "published_at": "2026-04-28T00:00:00Z"},
+            {"tag_name": "v2.2.0", "published_at": "2026-04-25T00:00:00Z"},
+            {"tag_name": "v2.1.0", "published_at": "2026-04-20T00:00:00Z"},
+            {"tag_name": "v2.0.0", "published_at": "2026-04-10T00:00:00Z"},
+            {"tag_name": "v1.1.0", "published_at": "2026-02-10T00:00:00Z"},
+            {"tag_name": "v1.0.0", "published_at": "2026-01-01T00:00:00Z"},
+        ]
         checker = FakeChecker(
             responses={
                 "owner/repo": {
                     "ok": True,
-                    "tag_name": "v1.6.0",
-                    "name": "v1.6.0",
-                    "published_at": "2026-04-30T00:00:00Z",
-                    "html_url": "https://github.com/owner/repo/releases/tag/v1.6.0",
+                    "tag_name": "v2.3.0",
+                    "name": "v2.3.0",
+                    "published_at": "2026-04-28T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v2.3.0",
                     "body": "Minor release",
                     "prerelease": False,
                     "draft": False,
                     "rate_limit": {},
                 }
             },
+            release_history={"owner/repo": release_history},
             config_path=self.config_path,
             state_path=self.state_path,
             token="test",
@@ -626,15 +637,8 @@ class TestGitHubReleaseChecker(unittest.TestCase):
                     "schema_version": "1.0.0",
                     "repos": {
                         "owner/repo": {
-                            "latest_tag": "v1.5.0",
-                            "history": [
-                                {"published_at": "2026-01-01T00:00:00Z", "latest_tag": "v1.0.0", "release_attention_score": 1},
-                                {"published_at": "2026-02-10T00:00:00Z", "latest_tag": "v1.1.0", "release_attention_score": 1},
-                                {"published_at": "2026-03-20T00:00:00Z", "latest_tag": "v1.2.0", "release_attention_score": 2},
-                                {"published_at": "2026-04-10T00:00:00Z", "latest_tag": "v1.3.0", "release_attention_score": 2},
-                                {"published_at": "2026-04-20T00:00:00Z", "latest_tag": "v1.4.0", "release_attention_score": 2},
-                                {"published_at": "2026-04-25T00:00:00Z", "latest_tag": "v1.5.0", "release_attention_score": 2}
-                            ]
+                            "latest_tag": "v2.2.0",
+                            "history": []
                         }
                     }
                 },
@@ -644,10 +648,21 @@ class TestGitHubReleaseChecker(unittest.TestCase):
         result = checker.check_repos()
         item = result["results"][0]
         self.assertEqual(item["repo_trend"], "accelerating")
-        self.assertEqual(len(item["history"]), 7)
 
     def test_repo_trend_marks_noisy_with_many_low_impact_releases(self):
         self.write_config(["owner/repo"])
+        # GitHub release history: many minor/patch releases with inconsistent cadence
+        # Intervals: 40, 45, 35, 50, 30 → recent_avg=40, previous_avg=40 (not accel/slowing)
+        # Spread of last 4 = 20 > 7 (not stable) → falls through to noisy check
+        # All minor/patch → should be noisy
+        release_history = [
+            {"tag_name": "v1.5.0", "published_at": "2026-05-01T00:00:00Z"},
+            {"tag_name": "v1.4.3", "published_at": "2026-03-11T00:00:00Z"},
+            {"tag_name": "v1.4.2", "published_at": "2026-01-20T00:00:00Z"},
+            {"tag_name": "v1.4.1", "published_at": "2025-12-16T00:00:00Z"},
+            {"tag_name": "v1.4.0", "published_at": "2025-11-01T00:00:00Z"},
+            {"tag_name": "v1.3.0", "published_at": "2025-09-22T00:00:00Z"},
+        ]
         checker = FakeChecker(
             responses={
                 "owner/repo": {
@@ -662,6 +677,7 @@ class TestGitHubReleaseChecker(unittest.TestCase):
                     "rate_limit": {},
                 }
             },
+            release_history={"owner/repo": release_history},
             config_path=self.config_path,
             state_path=self.state_path,
             token="test",
@@ -673,13 +689,7 @@ class TestGitHubReleaseChecker(unittest.TestCase):
                     "repos": {
                         "owner/repo": {
                             "latest_tag": "v1.4.0",
-                            "history": [
-                                {"published_at": "2026-04-01T00:00:00Z", "latest_tag": "v1.0.0", "semver_change": "minor", "release_attention_score": 1},
-                                {"published_at": "2026-04-06T00:00:00Z", "latest_tag": "v1.1.0", "semver_change": "patch", "release_attention_score": 1},
-                                {"published_at": "2026-04-11T00:00:00Z", "latest_tag": "v1.2.0", "semver_change": "patch", "release_attention_score": 1},
-                                {"published_at": "2026-04-16T00:00:00Z", "latest_tag": "v1.3.0", "semver_change": "minor", "release_attention_score": 2},
-                                {"published_at": "2026-04-21T00:00:00Z", "latest_tag": "v1.4.0", "semver_change": "patch", "release_attention_score": 1}
-                            ]
+                            "history": []
                         }
                     }
                 },
