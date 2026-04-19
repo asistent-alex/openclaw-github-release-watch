@@ -93,12 +93,12 @@ def _attention_palette(level: Any) -> tuple[str, str]:
 
 def _trend_label(trend: Any) -> str:
     mapping = {
-        "accelerating": "Speeding up",
-        "slowing": "Slowing",
-        "stable": "Steady",
-        "volatile": "Major-heavy",
-        "noisy": "Busy",
-        "new": "New",
+        "accelerating": "faster lately",
+        "slowing": "slower lately",
+        "stable": "steady",
+        "volatile": "big upgrades lately",
+        "noisy": "many small releases",
+        "new": "too new to judge",
     }
     return mapping.get(str(trend), str(trend).replace("_", " ").title())
 
@@ -124,10 +124,6 @@ def _signal_badges_html(item: dict[str, Any]) -> str:
     if level:
         bg, fg = _attention_palette(level)
         badges.append(_badge(f'Attention: {str(level).title()}', bg, fg))
-
-    trend = item.get("repo_trend")
-    if trend:
-        badges.append(_badge(f'Cadence: {_trend_label(trend)}', "#eff6ff", "#1d4ed8", border="#bfdbfe"))
 
     if not badges:
         return ""
@@ -180,35 +176,44 @@ def _repo_context_html(item: dict[str, Any]) -> str:
     return ''.join(parts)
 
 
-def _detail_block_html(details: str, *, heading: bool = True) -> str:
+def _section_title_html(title: str) -> str:
+    return f'<div style="font-size:13px;line-height:18px;font-weight:bold;letter-spacing:0.04em;text-transform:uppercase;color:{MUTED};">{_esc(title)}</div>'
+
+
+def _summary_header_html(heading_badges_html: str = "") -> str:
+    return (
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" '
+        'style="border-collapse:collapse;margin-top:8px;width:100%;">'
+        '<tr>'
+        f'<td valign="top" style="font-size:13px;line-height:18px;font-weight:bold;letter-spacing:0.04em;text-transform:uppercase;color:{MUTED};">Latest release summary</td>'
+        f'<td align="right" valign="top" style="font-size:11px;line-height:16px;color:{TEXT};white-space:nowrap;">{heading_badges_html}</td>'
+        '</tr>'
+        '</table>'
+    )
+
+
+def _detail_block_html(details: str) -> str:
     if not details:
         return ""
-    title_html = (
-        f'<div style="font-size:11px;line-height:16px;font-weight:bold;letter-spacing:0.04em;text-transform:uppercase;color:{MUTED};margin-top:8px;">AI Summary of updates</div>'
-        if heading
-        else ""
-    )
-    return f'{title_html}<div style="font-size:12px;line-height:18px;color:{TEXT};margin-top:4px;">{_esc(details)}</div>'
+    return f'<div style="font-size:12px;line-height:18px;color:{TEXT};margin-top:4px;">{_esc(details)}</div>'
 
 
-def _meaning_html(item: dict[str, Any], *, heading: bool = True) -> str:
+def _meaning_text(item: dict[str, Any]) -> str:
     status = str(item.get("status") or "unchanged")
     error_text = item.get("error") or ""
     excerpt = item.get("release_notes_excerpt") or ""
     action = item.get("release_attention_action") or ""
-    details = ""
 
     if status == "error":
-        details = error_text or "GitHub metadata was unavailable for this repository in this cycle."
-    elif excerpt:
-        details = excerpt
-    elif status == "first_seen":
+        return error_text or "GitHub metadata was unavailable for this repository in this cycle."
+    if excerpt:
+        return excerpt
+    if status == "first_seen":
         latest = item.get("latest_tag") or "latest release"
-        details = f'Newly added to tracking at {latest}.'
-    elif action:
-        details = action
-
-    return _detail_block_html(details, heading=heading)
+        return f'Newly added to tracking at {latest}.'
+    if action:
+        return action
+    return ""
 
 
 def _published_label(value: str | None) -> str:
@@ -240,11 +245,14 @@ def _status_badge_html(item: dict[str, Any]) -> str:
 def _timing_meta_html(item: dict[str, Any]) -> str:
     days_since = item.get("days_since_last_release")
     avg = item.get("avg_release_interval_days")
+    trend = item.get("repo_trend")
     parts = []
     if days_since is not None:
         parts.append(f'since {days_since}d')
     if avg is not None:
         parts.append(f'avg {avg}d')
+    if trend:
+        parts.append(f'pace {_trend_label(trend)}')
     if not parts:
         return ""
     return _esc(" · ".join(parts))
@@ -256,7 +264,10 @@ def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = Non
     link = _esc(item.get("html_url") or "")
     repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:17px;line-height:24px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo}</span>'
     desc = item.get("description") or ''
-    desc_html = f'<div style="font-size:{H4}px;line-height:18px;color:{MUTED};">{_esc(desc)}</div>' if desc else ''
+    desc_html = (
+        f'{_section_title_html("Project overview")}<div style="font-size:{H4}px;line-height:18px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>'
+        if desc else ''
+    )
     context_html = _repo_context_html(item)
     status_html = _status_badge_html(item)
     semver_change = item.get("semver_change")
@@ -264,7 +275,12 @@ def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = Non
     version_html = f'<span style="display:inline-block;font-size:13px;line-height:20px;color:{TEXT};vertical-align:middle;">&nbsp;·&nbsp;{latest}{semver_html}</span>'
     timing_html = _timing_meta_html(item)
     signal_badges = _signal_badges_html(item)
-    meaning_html = _detail_block_html(details_override, heading=show_summary_heading) if details_override is not None else _meaning_html(item, heading=show_summary_heading)
+    heading_badges_html = ""
+    if signal_badges and show_summary_heading:
+        heading_badges_html = signal_badges.replace('<div style="margin-top:8px;">', '', 1).replace('</div>', '', 1)
+    meaning_text = details_override if details_override is not None else _meaning_text(item)
+    summary_header_html = _summary_header_html(heading_badges_html) if show_summary_heading and meaning_text else ""
+    meaning_html = _detail_block_html(meaning_text) if meaning_text else ""
     release_meta_html = f'<span style="display:inline-block;font-size:11px;line-height:16px;color:{MUTED};vertical-align:middle;">&nbsp;·&nbsp;{timing_html}</span>' if timing_html else ''
     header_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}{status_html}{version_html}{release_meta_html}</div>'
 
@@ -273,15 +289,19 @@ def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = Non
     ]
     if desc_html:
         rows.append(
-            f'<tr><td style="padding:4px 16px 0 16px;font-size:12px;line-height:18px;color:{MUTED};">{desc_html}</td></tr>'
+            f'<tr><td style="padding:8px 16px 0 16px;font-size:12px;line-height:18px;color:{MUTED};">{desc_html}</td></tr>'
         )
-    if signal_badges:
+    if signal_badges and not show_summary_heading:
         rows.append(
             f'<tr><td style="padding:8px 16px 0 16px;font-size:11px;line-height:16px;color:{TEXT};">{signal_badges}</td></tr>'
         )
+    if summary_header_html:
+        rows.append(
+            f'<tr><td style="padding:8px 16px 0 16px;font-size:11px;line-height:16px;color:{TEXT};">{summary_header_html}</td></tr>'
+        )
     if meaning_html:
         rows.append(
-            f'<tr><td style="padding:8px 16px 14px 16px;font-size:12px;line-height:18px;color:{TEXT};">{meaning_html}</td></tr>'
+            f'<tr><td style="padding:4px 16px 14px 16px;font-size:12px;line-height:18px;color:{TEXT};">{meaning_html}</td></tr>'
         )
     else:
         rows.append('<tr><td style="padding:0 0 14px 0;"></td></tr>')
