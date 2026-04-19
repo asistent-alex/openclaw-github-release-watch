@@ -40,6 +40,18 @@ TEST_DIGEST = {
             "repo_trend_reason": "release cadence is speeding up",
         },
     ],
+    "interesting_repos": [
+        {
+            "repo": "ecosystem/tradclaw",
+            "label": "Tradclaw",
+            "description": "Household and parenting OpenClaw starter repo",
+            "reason": "Interesting ecosystem project, but not release-tracked yet.",
+            "stars": 257,
+            "forks": 25,
+            "html_url": "https://github.com/ChatPRD/tradclaw",
+            "updated_at": "2026-04-19T11:59:02Z"
+        }
+    ],
     "updates": 1,
     "failures": 0,
 }
@@ -92,6 +104,9 @@ def test_render_digest_contains_key_sections():
     assert 'firmade.ai' in out
     assert 'openclaw-github-release-watch' in out
     assert '#1d4ed8' in out or '#38bdf8' in out
+    assert 'OpenClaw Ecosystem Watch' in out
+    assert 'Tradclaw' in out
+    assert 'No releases yet' in out
 
 
 def test_render_empty_digest_has_stable_message():

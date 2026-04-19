@@ -29,6 +29,31 @@ def _normalize_repos(repos: Optional[List[str]]) -> List[str]:
     return normalized
 
 
+def _normalize_interesting_repos(items: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Normalize non-release ecosystem repos kept outside the main watcher."""
+    if not items:
+        return []
+
+    normalized: List[Dict[str, Any]] = []
+    seen = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        repo = str(item.get("repo") or "").strip()
+        if not repo or "/" not in repo or repo in seen:
+            continue
+        seen.add(repo)
+        normalized.append(
+            {
+                "repo": repo,
+                "label": str(item.get("label") or repo.split("/")[-1]).strip(),
+                "kind": str(item.get("kind") or "ecosystem").strip(),
+                "reason": str(item.get("reason") or "").strip(),
+            }
+        )
+    return normalized
+
+
 def load_github_config(
     config_path: Optional[Path] = None,
     repo_overrides: Optional[List[str]] = None,
@@ -46,6 +71,7 @@ def load_github_config(
         "enabled": False,
         "recipient": os.environ.get("GITHUB_RELEASE_WATCH_RECIPIENT"),
         "repos": [],
+        "interesting_repos": [],
         "config_path": str(path),
         "state_path": str(DEFAULT_STATE_PATH),
     }
@@ -59,6 +85,7 @@ def load_github_config(
                 config["recipient"] = raw.get("recipient") or config["recipient"]
                 config["state_path"] = str(raw.get("state_path") or DEFAULT_STATE_PATH)
                 config["repos"] = _normalize_repos(raw.get("repos", []))
+                config["interesting_repos"] = _normalize_interesting_repos(raw.get("interesting_repos", []))
                 config["categories"] = raw.get("categories", [])
         except (json.JSONDecodeError, OSError):
             config["enabled"] = False

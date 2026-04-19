@@ -412,6 +412,51 @@ def _render_table(results: list[dict[str, Any]]) -> str:
     )
 
 
+def _ecosystem_card_html(item: dict[str, Any]) -> str:
+    repo = _esc(item.get("repo"))
+    label = _esc(item.get("label") or repo)
+    link = _esc(item.get("html_url") or f'https://github.com/{repo}')
+    repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:17px;line-height:24px;font-weight:bold;">{label}</a>'
+    description = _esc(item.get("description") or "Interesting OpenClaw ecosystem repository")
+    reason = _esc(item.get("reason") or "Worth tracking, but kept outside the release digest until it adopts GitHub releases.")
+    stars = item.get("stars")
+    forks = item.get("forks")
+    updated_at = item.get("updated_at")
+    meta_bits = []
+    if stars is not None:
+        meta_bits.append(f'★ {stars}')
+    if forks is not None:
+        meta_bits.append(f'⑂ {forks}')
+    if updated_at:
+        meta_bits.append(f'Updated: {_published_label(updated_at)}')
+    meta = ' · '.join(meta_bits)
+    return (
+        '<tr>'
+        f'<td style="border-top:1px solid {BORDER};padding:0;">'
+        f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;width:100%;">'
+        f'<tr><td style="padding:14px 16px 0 16px;"><div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}</div></td></tr>'
+        f'<tr><td style="padding:4px 16px 0 16px;"><div style="font-size:12px;line-height:18px;color:{MUTED};">{description}</div></td></tr>'
+        f'<tr><td style="padding:6px 16px 0 16px;"><div style="font-size:11px;line-height:16px;color:{MUTED};">{_esc(meta)}</div></td></tr>'
+        f'<tr><td style="padding:8px 16px 0 16px;"><span style="display:inline-block;padding:3px 8px;background:#f3f4f6;color:#374151;font-size:11px;line-height:16px;font-weight:bold;border:1px solid #e5e7eb;border-radius:999px;">No releases yet</span></td></tr>'
+        f'<tr><td style="padding:8px 16px 14px 16px;"><div style="font-size:12px;line-height:18px;color:{TEXT};">{reason}</div></td></tr>'
+        '</table></td></tr>'
+    )
+
+
+def _render_interesting_repos(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return ""
+    entries = ''.join(_ecosystem_card_html(item) for item in items)
+    return (
+        '<tr><td style="padding:0 0 18px 0;">'
+        f'<div style="font-size:18px;line-height:24px;font-weight:bold;color:{DARK};margin-bottom:10px;">OpenClaw Ecosystem Watch</div>'
+        f'<div style="font-size:12px;line-height:18px;color:{MUTED};margin-bottom:10px;">Interesting repositories worth tracking separately from the release digest.</div>'
+        f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
+        + entries
+        + '</table></td></tr>'
+    )
+
+
 def render_html(data: dict[str, Any]) -> str:
     results = list(data.get("results") or [])
     updates = int(data.get("updates") or 0)
@@ -456,6 +501,7 @@ def render_html(data: dict[str, Any]) -> str:
         updates_fg = "#0f766e"
 
     categories = list(data.get("categories") or [])
+    interesting_repos = list(data.get("interesting_repos") or [])
 
     parts = [
         '<html><body style="margin:0;padding:0;background:%s;font-family:Arial,Helvetica,sans-serif;color:%s;">' % (BG, TEXT),
@@ -481,6 +527,7 @@ def render_html(data: dict[str, Any]) -> str:
         '</tr></table>',
         _render_highlights(results),
         _render_categorized_table(results, categories) if categories else _render_table(results),
+        _render_interesting_repos(interesting_repos),
         '<tr><td style="padding:0;">',
         '<div style="font-size:12px;line-height:18px;color:%s;">Next check: scheduled by cron.</div>' % MUTED,
         '</td></tr>',

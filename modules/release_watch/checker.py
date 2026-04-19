@@ -650,6 +650,32 @@ class GitHubReleaseChecker:
     ) -> Dict[str, Any]:
         return {"repo": repo, "status": status, **repo_state, "rate_limit": rate_limit}
 
+    def _interesting_repo_items(self) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        for item in self.config.get("interesting_repos", []):
+            if not isinstance(item, dict):
+                continue
+            repo = str(item.get("repo") or "").strip()
+            if not repo:
+                continue
+            repo_info = self.get_repo_info(repo)
+            items.append(
+                {
+                    "repo": repo,
+                    "label": item.get("label") or repo.split("/")[-1],
+                    "kind": item.get("kind") or "ecosystem",
+                    "reason": item.get("reason") or "",
+                    "description": repo_info.get("description") if isinstance(repo_info, dict) else None,
+                    "stars": repo_info.get("stargazers_count") if isinstance(repo_info, dict) else None,
+                    "forks": repo_info.get("forks_count") if isinstance(repo_info, dict) else None,
+                    "html_url": repo_info.get("html_url") if isinstance(repo_info, dict) else f"https://github.com/{repo}",
+                    "homepage": repo_info.get("homepage") if isinstance(repo_info, dict) else None,
+                    "updated_at": repo_info.get("updated_at") if isinstance(repo_info, dict) else None,
+                    "release_tracking": "not-release-tracked",
+                }
+            )
+        return items
+
     def _snapshot_from_state(self, state: Dict[str, Any]) -> Dict[str, Any]:
         results = [
             {"repo": repo, **repo_state}
@@ -660,6 +686,7 @@ class GitHubReleaseChecker:
             "enabled": bool(self.config.get("enabled")),
             "results": results,
             "categories": self.config.get("categories", []),
+            "interesting_repos": self._interesting_repo_items(),
             "updates": sum(1 for item in results if item.get("status") == "updated"),
             "failures": sum(1 for item in results if item.get("status") == "error"),
             "last_run": state.get("last_run"),
@@ -770,6 +797,7 @@ class GitHubReleaseChecker:
             "failures": failures,
             "results": results,
             "categories": self.config.get("categories", []),
+            "interesting_repos": self._interesting_repo_items(),
             "rate_limit": latest_rate_limit,
             "state_path": str(self.state_path),
         }
@@ -821,6 +849,7 @@ class GitHubReleaseChecker:
             "body": "\n".join(self._build_digest_lines(snapshot)),
             "results": snapshot.get("results", []),
             "categories": snapshot.get("categories", []),
+            "interesting_repos": snapshot.get("interesting_repos", []),
             "failures": snapshot.get("failures", 0),
             "updates": snapshot.get("updates", 0),
             "top_attention": [
