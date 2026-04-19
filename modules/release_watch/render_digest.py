@@ -242,7 +242,7 @@ def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = Non
     link = _esc(item.get("html_url") or "")
     repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:17px;line-height:24px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo}</span>'
     desc = item.get("description") or ''
-    desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:3px;">{_esc(desc)}</div>' if desc else ''
+    desc_html = f'<div style="font-size:{H4}px;line-height:18px;color:{MUTED};">{_esc(desc)}</div>' if desc else ''
     context_html = _repo_context_html(item)
     status_html = _status_badge_html(item)
     semver_html = _semver_badge(item.get("semver_change"))
@@ -250,8 +250,37 @@ def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = Non
     timing_html = _timing_meta_html(item)
     signal_badges = _signal_badges_html(item)
     meaning_html = _detail_block_html(details_override, heading=show_summary_heading) if details_override is not None else _meaning_html(item, heading=show_summary_heading)
-    heading_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}{status_html}{version_html}</div>'
-    return f'<div style="padding:14px 16px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{heading_html}{desc_html}{timing_html}{signal_badges}{meaning_html}</div>'
+    header_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}{status_html}{version_html}</div>'
+
+    rows = [
+        f'<tr><td style="padding:14px 16px 0 16px;font-size:13px;line-height:20px;color:{TEXT};">{header_html}</td></tr>'
+    ]
+    if desc_html:
+        rows.append(
+            f'<tr><td style="padding:4px 16px 0 16px;font-size:12px;line-height:18px;color:{MUTED};">{desc_html}</td></tr>'
+        )
+    if timing_html:
+        rows.append(
+            f'<tr><td style="padding:6px 16px 0 16px;font-size:11px;line-height:16px;color:{MUTED};">{timing_html}</td></tr>'
+        )
+    if signal_badges:
+        rows.append(
+            f'<tr><td style="padding:8px 16px 0 16px;font-size:11px;line-height:16px;color:{TEXT};">{signal_badges}</td></tr>'
+        )
+    if meaning_html:
+        rows.append(
+            f'<tr><td style="padding:8px 16px 14px 16px;font-size:12px;line-height:18px;color:{TEXT};">{meaning_html}</td></tr>'
+        )
+    else:
+        rows.append('<tr><td style="padding:0 0 14px 0;"></td></tr>')
+
+    return (
+        '<tr>'
+        f'<td style="border-top:1px solid {BORDER};padding:0;">'
+        f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;width:100%;">'
+        + ''.join(rows)
+        + '</table></td></tr>'
+    )
 
 
 def _render_highlights(results: list[dict[str, Any]]) -> str:
