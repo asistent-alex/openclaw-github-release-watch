@@ -26,6 +26,7 @@ TEST_DIGEST = {
             "html_url": "https://example.com/releases/tag/v1.0.0",
             "published_at": "2026-04-09T01:00:00Z",
             "semver_change": "minor",
+            "description": "Open-source AI agent that builds zero-human businesses, grows audiences, ships code, all autonomously.",
             "release_notes_excerpt": "Added smarter sync • Fixed rendering",
             "stars": 120,
             "stars_delta": 5,
@@ -38,6 +39,8 @@ TEST_DIGEST = {
             "release_attention_action": "review before upgrade",
             "repo_trend": "accelerating",
             "repo_trend_reason": "release cadence is speeding up",
+            "days_since_last_release": 12,
+            "avg_release_interval_days": 21,
         },
     ],
     "interesting_repos": [
@@ -93,13 +96,18 @@ def test_render_digest_contains_key_sections():
     assert 'Updated' in out
     assert 'Minor' in out
     assert 'Added smarter sync' in out
-    assert 'AI Summary of updates' in out
+    assert 'Project overview' in out
+    assert 'Latest release summary' in out
+    assert 'AI Summary of updates' not in out
     assert '120 (+5)' in out
     assert '18 (+2)' in out
     assert '#eab308' in out
     assert 'Security (1)' in out
     assert 'Attention: High' in out
-    assert 'Cadence: Speeding up' in out
+    assert 'since ' in out
+    assert 'avg ' in out
+    assert 'pace faster lately' in out
+    assert 'Release cadence is speeding up.' not in out
     assert 'firmade.it' in out
     assert 'firmade.ai' in out
     assert 'openclaw-github-release-watch' in out

@@ -221,6 +221,17 @@ What they cover:
 - ecosystem watch rendering
 - HTML template stability
 
+## Email card anatomy
+
+Repository cards in the HTML digest are intentionally split into clear sections:
+- repo title + stars/forks + release/version context
+- timing/meta line (`since`, `avg`, `pace`)
+- **Project overview** for the repository description
+- **Latest release summary** for the cleaned human-readable release excerpt
+- security / attention badges aligned with the release-summary header when present
+
+This keeps the card compact while making the repo description distinct from the latest release notes.
+
 ## Operational notes
 
 - this project is intentionally lightweight and stdlib-first
