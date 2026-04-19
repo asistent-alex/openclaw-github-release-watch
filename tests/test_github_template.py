@@ -81,12 +81,12 @@ def test_render_digest_contains_key_sections():
     assert 'Updated' in out
     assert 'Minor' in out
     assert 'Added smarter sync' in out
+    assert 'AI Summary of updates' in out
     assert '★ 120 (+5)' in out
     assert '⑂ 18 (+2)' in out
-    assert 'Security advisories: 1' in out
-    assert 'Release Attention: High' in out
-    assert 'Repo Trend:' in out
-    assert 'Accelerating' in out
+    assert 'Security (1)' in out
+    assert 'Attention: High' in out
+    assert 'Cadence: Speeding up' in out
     assert 'firmade.it' in out
     assert 'firmade.ai' in out
     assert 'openclaw-github-release-watch' in out
@@ -102,6 +102,7 @@ def test_render_empty_digest_has_stable_message():
     assert 'No immediate action required' not in out
     assert 'No tracked repositories yet.' in out or 'No new releases were detected' in out
     assert '#134e4a' in out or '#5eead4' in out
+    assert 'Needs review' in out
 
 
 if __name__ == '__main__':

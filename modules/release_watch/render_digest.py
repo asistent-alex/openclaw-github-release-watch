@@ -79,42 +79,64 @@ def _notes_excerpt_html(item: dict[str, Any]) -> str:
     excerpt = item.get("release_notes_excerpt") or ""
     if not excerpt:
         return ""
-    return f'<div style="font-size:12px;color:{TEXT};margin-top:6px;">{_esc(excerpt)}</div>'
+    return f'<div style="font-size:12px;line-height:18px;color:{TEXT};margin-top:6px;">{_esc(excerpt)}</div>'
 
 
-def _release_attention_html(item: dict[str, Any]) -> str:
-    level = item.get("release_attention")
-    if not level:
-        return ""
+def _attention_palette(level: Any) -> tuple[str, str]:
     palette = {
         "high": ("#fee2e2", "#991b1b"),
         "medium": ("#fef3c7", "#92400e"),
         "low": ("#dcfce7", "#166534"),
     }
-    bg, fg = palette.get(str(level), ("#e5e7eb", "#374151"))
-    reasons = item.get("release_attention_reasons") or []
-    reason_text = " • ".join(str(reason) for reason in reasons[:2])
-    action = item.get("release_attention_action") or ""
+    return palette.get(str(level), ("#e5e7eb", "#374151"))
+
+
+def _trend_label(trend: Any) -> str:
+    mapping = {
+        "accelerating": "Speeding up",
+        "slowing": "Slowing",
+        "stable": "Steady",
+        "volatile": "Major-heavy",
+        "noisy": "Busy",
+        "new": "New",
+    }
+    return mapping.get(str(trend), str(trend).replace("_", " ").title())
+
+
+def _badge(text: str, bg: str, fg: str, *, border: str | None = None) -> str:
+    border_color = border or bg
     return (
-        f'<div style="margin-top:8px;">'
-        f'<span style="display:inline-block;padding:2px 8px;background:{bg};color:{fg};font-size:11px;line-height:16px;font-weight:bold;border-radius:999px;">Release Attention: {_esc(str(level).title())}</span>'
-        f'{f"<div style=\"font-size:12px;color:{MUTED};margin-top:4px;\">{_esc(reason_text)}</div>" if reason_text else ""}'
-        f'{f"<div style=\"font-size:12px;color:{TEXT};margin-top:4px;\">{_esc(action)}</div>" if action else ""}'
-        f'</div>'
+        f'<span style="display:inline-block;margin:0 6px 6px 0;padding:2px 8px;'
+        f'background:{bg};color:{fg};font-size:11px;line-height:16px;font-weight:bold;'
+        f'border:1px solid {border_color};border-radius:999px;">{_esc(text)}</span>'
     )
 
 
-def _repo_trend_html(item: dict[str, Any]) -> str:
+def _signal_badges_html(item: dict[str, Any]) -> str:
+    badges: list[str] = []
+    semver = item.get("semver_change")
+    if semver:
+        semver_html = _semver_badge(semver)
+        if semver_html:
+            badges.append(semver_html)
+
+    if item.get("has_security_advisories"):
+        count = item.get("advisories_count")
+        text = f'Security{f" ({count})" if count not in (None, "") else ""}'
+        badges.append(_badge(text, "#fff7ed", "#9a3412", border="#fed7aa"))
+
+    level = item.get("release_attention")
+    if level:
+        bg, fg = _attention_palette(level)
+        badges.append(_badge(f'Attention: {str(level).title()}', bg, fg))
+
     trend = item.get("repo_trend")
-    if not trend:
+    if trend:
+        badges.append(_badge(f'Cadence: {_trend_label(trend)}', "#eff6ff", "#1d4ed8", border="#bfdbfe"))
+
+    if not badges:
         return ""
-    reason = item.get("repo_trend_reason") or ""
-    return (
-        f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">'
-        f'<strong>Repo Trend:</strong> {_esc(str(trend).title())}'
-        f'{f" — {_esc(reason)}" if reason else ""}'
-        f'</div>'
-    )
+    return f'<div style="margin-top:6px;">{"".join(badges)}</div>'
 
 
 def _repo_context_html(item: dict[str, Any]) -> str:
@@ -123,8 +145,6 @@ def _repo_context_html(item: dict[str, Any]) -> str:
     forks = item.get("forks")
     stars_delta = item.get("stars_delta")
     forks_delta = item.get("forks_delta")
-    advisories_count = item.get("advisories_count")
-    has_advisories = item.get("has_security_advisories")
 
     if stars is not None:
         star_text = f'★ {stars}'
@@ -136,12 +156,38 @@ def _repo_context_html(item: dict[str, Any]) -> str:
         if forks_delta not in (None, 0):
             fork_text += f' ({forks_delta:+d})'
         bits.append(fork_text)
-    if has_advisories:
-        bits.append(f'⚠ Security advisories: {advisories_count}')
 
     if not bits:
         return ""
     return f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(" • ".join(bits))}</div>'
+
+
+def _meaning_html(item: dict[str, Any], *, heading: bool = True) -> str:
+    status = str(item.get("status") or "unchanged")
+    error_text = item.get("error") or ""
+    excerpt = item.get("release_notes_excerpt") or ""
+    action = item.get("release_attention_action") or ""
+    details = ""
+
+    if status == "error":
+        details = error_text or "GitHub metadata was unavailable for this repository in this cycle."
+    elif excerpt:
+        details = excerpt
+    elif status == "first_seen":
+        latest = item.get("latest_tag") or "latest release"
+        details = f'Newly added to tracking at {latest}.'
+    elif action:
+        details = action
+
+    if not details:
+        return ""
+
+    title_html = (
+        f'<div style="font-size:11px;line-height:16px;font-weight:bold;letter-spacing:0.04em;text-transform:uppercase;color:{MUTED};margin-top:8px;">AI Summary of updates</div>'
+        if heading
+        else ""
+    )
+    return f'{title_html}<div style="font-size:12px;line-height:18px;color:{TEXT};margin-top:4px;">{_esc(details)}</div>'
 
 
 def _published_label(value: str | None) -> str:
@@ -182,27 +228,23 @@ def _render_highlights(results: list[dict[str, Any]]) -> str:
         latest = _esc(item.get("latest_tag") or "—")
         previous = _esc(item.get("previous_tag") or "—")
         link = _esc(item.get("html_url") or "")
-        error = _esc(item.get("error") or "")
         desc = _esc(item.get("description") or "")
         label, bg, fg = _status_colors(status)
 
-        semver_html = _semver_badge(item.get("semver_change"))
-        notes_html = _notes_excerpt_html(item)
-        context_html = _repo_context_html(item)
-        attention_html = _release_attention_html(item)
-        trend_html = _repo_trend_html(item)
-
         if status == "updated":
-            summary = f'{previous} → {latest}{semver_html}'
+            summary = f'{previous} → {latest}'
         elif status == "first_seen":
-            summary = f'First observed at {latest}{semver_html}'
+            summary = f'First observed at {latest}'
         elif status == "error":
-            summary = error or 'Unknown error'
+            summary = 'Repository check needs attention'
         else:
             summary = latest
 
         repo_link_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;">{repo}</a>' if link else repo
-        link_html = f' &nbsp;·&nbsp; <a href="{link}" style="color:{ACCENT};text-decoration:none;">View release</a>' if link else ''
+        link_html = f' &nbsp;·&nbsp; <a href="{link}" style="color:{ACCENT};text-decoration:none;">View release</a>' if link and status != "error" else ''
+        signal_badges = _signal_badges_html(item)
+        meaning_html = _meaning_html(item, heading=False)
+
         rows.append(
             '<tr><td style="padding:0 0 10px 0;">'
             f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
@@ -210,11 +252,9 @@ def _render_highlights(results: list[dict[str, Any]]) -> str:
             f'<td valign="top" style="padding:14px 16px;">'
             f'<div style="font-size:{H2}px;line-height:22px;font-weight:bold;color:{DARK};">{repo_link_html}</div>'
             f'{f"<div style=\"font-size:{H4}px;color:{MUTED};margin-top:2px;\">{desc}</div>" if desc else ""}'
-            f'{context_html}'
-            f'<div style="font-size:13px;line-height:20px;color:{TEXT};margin-top:6px;">{summary}{link_html}</div>'
-            f'{attention_html}'
-            f'{trend_html}'
-            f'{notes_html}'
+            f'<div style="font-size:13px;line-height:20px;color:{TEXT};margin-top:6px;"><strong>{summary}</strong>{link_html}</div>'
+            f'{signal_badges}'
+            f'{meaning_html}'
             '</td>'
             f'<td width="110" valign="top" align="right" style="padding:14px 16px;">'
             f'<span style="display:inline-block;padding:4px 10px;border:1px solid {bg};background:{bg};color:{fg};font-size:12px;line-height:16px;font-weight:bold;">{_esc(label)}</span>'
@@ -294,15 +334,14 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
                 repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:{H2}px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:{H2}px;font-weight:bold;color:{DARK};">{repo}</span>'
                 desc = item.get("description") or ''
                 desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
-                notes_html = _notes_excerpt_html(item)
                 context_html = _repo_context_html(item)
-                attention_html = _release_attention_html(item)
-                trend_html = _repo_trend_html(item)
+                signal_badges = _signal_badges_html(item)
+                meaning_html = _meaning_html(item, heading=True)
                 semver_html = _semver_badge(item.get("semver_change"))
                 latest_html = f'{latest}{semver_html}'
                 rows.append(
                     '<tr>'
-                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}{attention_html}{trend_html}{notes_html}</td>'
+                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}{signal_badges}{meaning_html}</td>'
                     f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest_html}</td>'
                     f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
                     f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
@@ -355,9 +394,11 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
             desc = item.get("description") or ''
             desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
             context_html = _repo_context_html(item)
+            signal_badges = _signal_badges_html(item)
+            meaning_html = _meaning_html(item, heading=True)
             rows.append(
                 '<tr>'
-                f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}</td>'
+                f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}{signal_badges}{meaning_html}</td>'
                 f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest}</td>'
                 f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
                 f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
@@ -413,15 +454,14 @@ def _render_table(results: list[dict[str, Any]]) -> str:
         repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:{H2}px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:{H2}px;font-weight:bold;color:{DARK};">{repo}</span>'
         desc = item.get("description") or ''
         desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
-        notes_html = _notes_excerpt_html(item)
         context_html = _repo_context_html(item)
-        attention_html = _release_attention_html(item)
-        trend_html = _repo_trend_html(item)
+        signal_badges = _signal_badges_html(item)
+        meaning_html = _meaning_html(item, heading=True)
         semver_html = _semver_badge(item.get("semver_change"))
         latest_html = f'{latest}{semver_html}'
         rows.append(
             '<tr>'
-            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}{attention_html}{trend_html}{notes_html}</td>'
+            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}{signal_badges}{meaning_html}</td>'
             f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest_html}</td>'
             f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
             f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
@@ -448,6 +488,7 @@ def render_html(data: dict[str, Any]) -> str:
     updates = int(data.get("updates") or 0)
     failures = int(data.get("failures") or 0)
     monitored = len(results)
+    attention_count = sum(1 for item in results if item.get("release_attention") in {"high", "medium"} or item.get("status") == "error")
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     # Build dynamic subject with updated repo names
@@ -507,7 +548,7 @@ def render_html(data: dict[str, Any]) -> str:
         '<tr>',
         _summary_card('Tracked repos', monitored, CARD, DARK),
         _summary_card('Updates', updates, updates_bg if updates or not failures else CARD, updates_fg if updates or not failures else DARK),
-        _summary_card('Failures', failures, ERROR_BG if failures else CARD, ERROR_TEXT if failures else DARK),
+        _summary_card('Needs review', attention_count, WARN_BG if attention_count else CARD, WARN_TEXT if attention_count else DARK),
         '</tr></table>',
         _render_highlights(results),
         _render_categorized_table(results, categories) if categories else _render_table(results),
