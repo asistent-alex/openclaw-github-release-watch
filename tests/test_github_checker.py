@@ -818,7 +818,7 @@ class TestGitHubReleaseChecker(unittest.TestCase):
         self.assertTrue(status["viewer_starred_enabled"])
         self.assertEqual(status["viewer_starred_count"], 1)
 
-    def test_viewer_starred_marks_tracked_repos(self):
+    def test_viewer_starred_tracked_repos_are_counted_but_hidden_from_radar_list(self):
         self.write_config(["owner/tracked"], viewer_starred={"enabled": True, "limit": 30})
         checker = FakeChecker(
             responses={
@@ -855,10 +855,9 @@ class TestGitHubReleaseChecker(unittest.TestCase):
             token="test",
         )
         result = checker.check_repos()
-        starred_item = result["viewer_starred"][0]
-        self.assertTrue(starred_item["tracked"])
-        self.assertTrue(starred_item["has_releases"])
-        self.assertEqual(starred_item["latest_tag"], "v1.0.0")
+        self.assertEqual(result["viewer_starred"], [])
+        self.assertEqual(result["viewer_starred_summary"]["tracked_count"], 1)
+        self.assertEqual(result["viewer_starred_summary"]["untracked_count"], 0)
 
 
 if __name__ == "__main__":
