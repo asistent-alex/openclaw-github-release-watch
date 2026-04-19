@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'modules'))
 
@@ -679,6 +680,27 @@ class TestGitHubReleaseChecker(unittest.TestCase):
         result = checker.check_repos()
         item = result["results"][0]
         self.assertEqual(item["repo_trend"], "accelerating")
+
+    def test_repo_info_is_cached_between_calls(self):
+        self.write_config(["owner/repo"])
+        checker = GitHubReleaseChecker(
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        checker._attach_cache({"api_cache": {}})
+        response = {
+            "ok": True,
+            "status": 200,
+            "data": {"description": "Cached repo", "stargazers_count": 5},
+            "rate_limit": {},
+        }
+        with patch.object(checker, "_request_json", return_value=response) as mock_request:
+            first = checker.get_repo_info("owner/repo")
+            second = checker.get_repo_info("owner/repo")
+        self.assertEqual(first.get("description"), "Cached repo")
+        self.assertEqual(second.get("description"), "Cached repo")
+        self.assertEqual(mock_request.call_count, 1)
 
     def test_repo_trend_marks_noisy_with_many_low_impact_releases(self):
         self.write_config(["owner/repo"])

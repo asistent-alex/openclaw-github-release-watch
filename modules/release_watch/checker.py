@@ -26,6 +26,11 @@ NO_CONFIG_MESSAGE = "No GitHub repositories configured"
 RELEASE_NOTES_MAX_LINES = 3
 RELEASE_NOTES_MAX_CHARS = 280
 REPO_HISTORY_MAX_ITEMS = 12
+CACHE_TTL_SECONDS = {
+    "repo_info": 6 * 3600,
+    "release_history": 3 * 3600,
+    "advisories": 6 * 3600,
+}
 SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
 ATTENTION_KEYWORD_GROUPS = {
     "breaking": [
@@ -91,6 +96,8 @@ class GitHubReleaseChecker:
         )
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.token = token if token is not None else self._load_token()
+        self._api_cache: Dict[str, Dict[str, Any]] = {}
+        self._cache_dirty = False
 
     def _load_token(self) -> Optional[str]:
         """Load GitHub token from environment or OpenClaw config."""
@@ -153,7 +160,7 @@ class GitHubReleaseChecker:
 
     def _load_state(self) -> Dict[str, Any]:
         if not self.state_path.exists():
-            return {"schema_version": STATE_SCHEMA_VERSION, "repos": {}}
+            return {"schema_version": STATE_SCHEMA_VERSION, "repos": {}, "api_cache": {}}
         try:
             with open(self.state_path, "r", encoding="utf-8") as handle:
                 raw = json.load(handle)
@@ -161,15 +168,51 @@ class GitHubReleaseChecker:
                 raise ValueError("state must be a dict")
             if "repos" not in raw or not isinstance(raw["repos"], dict):
                 raw["repos"] = {}
+            if "api_cache" not in raw or not isinstance(raw["api_cache"], dict):
+                raw["api_cache"] = {}
             raw.setdefault("schema_version", STATE_SCHEMA_VERSION)
             return raw
         except (json.JSONDecodeError, OSError, ValueError) as exc:
             _logger.warning(f"Failed to load GitHub checker state: {exc}")
-            return {"schema_version": STATE_SCHEMA_VERSION, "repos": {}}
+            return {"schema_version": STATE_SCHEMA_VERSION, "repos": {}, "api_cache": {}}
 
     def _save_state(self, state: Dict[str, Any]) -> None:
         with open(self.state_path, "w", encoding="utf-8") as handle:
             json.dump(state, handle, indent=2)
+
+    def _attach_cache(self, state: Dict[str, Any]) -> None:
+        cache = state.setdefault("api_cache", {})
+        if not isinstance(cache, dict):
+            cache = {}
+            state["api_cache"] = cache
+        self._api_cache = cache
+        self._cache_dirty = False
+
+    def _cache_get(self, bucket: str, key: str) -> Any:
+        entries = self._api_cache.get(bucket)
+        if not isinstance(entries, dict):
+            return None
+        entry = entries.get(key)
+        if not isinstance(entry, dict):
+            return None
+        expires_at = entry.get("expires_at")
+        if not isinstance(expires_at, (int, float)) or expires_at <= datetime.now(timezone.utc).timestamp():
+            entries.pop(key, None)
+            self._cache_dirty = True
+            return None
+        return entry.get("data")
+
+    def _cache_set(self, bucket: str, key: str, data: Any, ttl_seconds: int) -> Any:
+        entries = self._api_cache.setdefault(bucket, {})
+        if not isinstance(entries, dict):
+            entries = {}
+            self._api_cache[bucket] = entries
+        entries[key] = {
+            "expires_at": datetime.now(timezone.utc).timestamp() + ttl_seconds,
+            "data": data,
+        }
+        self._cache_dirty = True
+        return data
 
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()
@@ -216,31 +259,45 @@ class GitHubReleaseChecker:
 
     def get_release_history(self, repo: str, per_page: int = 50) -> List[Dict[str, Any]]:
         """Fetch recent releases for a repository."""
+        cache_key = f"{repo}:{per_page}"
+        cached = self._cache_get("release_history", cache_key)
+        if isinstance(cached, list):
+            return cached
         result = self._request_json(
             f"https://api.github.com/repos/{repo}/releases?per_page={per_page}"
         )
         if not result.get("ok"):
             return []
         data = result.get("data", [])
-        return data if isinstance(data, list) else []
+        normalized = data if isinstance(data, list) else []
+        return self._cache_set("release_history", cache_key, normalized, CACHE_TTL_SECONDS["release_history"])
 
     def get_repo_info(self, repo: str) -> Dict[str, Any]:
         """Fetch repository info (description, etc.)."""
+        cached = self._cache_get("repo_info", repo)
+        if isinstance(cached, dict):
+            return cached
         result = self._request_json(f"https://api.github.com/repos/{repo}")
         if not result.get("ok"):
             return {}
         data = result.get("data", {})
-        return data if isinstance(data, dict) else {}
+        normalized = data if isinstance(data, dict) else {}
+        return self._cache_set("repo_info", repo, normalized, CACHE_TTL_SECONDS["repo_info"])
 
     def get_repo_advisories(self, repo: str, per_page: int = 10) -> List[Dict[str, Any]]:
         """Fetch repository security advisories when available."""
+        cache_key = f"{repo}:{per_page}"
+        cached = self._cache_get("advisories", cache_key)
+        if isinstance(cached, list):
+            return cached
         result = self._request_json(
             f"https://api.github.com/repos/{repo}/security-advisories?per_page={per_page}"
         )
         if not result.get("ok"):
             return []
         data = result.get("data", [])
-        return data if isinstance(data, list) else []
+        normalized = data if isinstance(data, list) else []
+        return self._cache_set("advisories", cache_key, normalized, CACHE_TTL_SECONDS["advisories"])
 
     def _is_supported_release(self, release: Dict[str, Any]) -> bool:
         return not bool(release.get("draft")) and not bool(release.get("prerelease"))
@@ -734,6 +791,7 @@ class GitHubReleaseChecker:
             return self._build_empty_check_result(timestamp)
 
         state = self._load_state()
+        self._attach_cache(state)
         results: List[Dict[str, Any]] = []
         updates = 0
         failures = 0
@@ -861,4 +919,8 @@ class GitHubReleaseChecker:
     def get_status_snapshot(self) -> Dict[str, Any]:
         """Return a snapshot with per-repo entries from saved state."""
         state = self._load_state()
-        return self._snapshot_from_state(state)
+        self._attach_cache(state)
+        snapshot = self._snapshot_from_state(state)
+        if self._cache_dirty:
+            self._save_state(state)
+        return snapshot
