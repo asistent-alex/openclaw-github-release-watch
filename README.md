@@ -1,99 +1,92 @@
 # GitHub Release Watch
 
-Focused GitHub release monitoring and digest generation for OpenClaw.
+GitHub Release Watch monitors selected GitHub repositories, detects stable releases, and turns them into a clean digest you can review in JSON, render as HTML, or send by email through IMM-Romania.
 
-GitHub Release Watch is a small Python-first skill for tracking stable GitHub releases, storing state locally, generating structured digests, rendering Outlook-friendly HTML, and optionally sending the digest by email through IMM-Romania.
+If you want a daily release briefing without drowning in raw changelogs, this repo is the thing.
 
-## What it does
+## Why it exists
 
-- tracks selected GitHub repositories
-- checks stable published releases only (`draft=false`, `prerelease=false`)
-- stores release state locally for delta-aware monitoring
-- classifies semantic version changes (`major`, `minor`, `patch`, `non-semver`)
-- extracts cleaned release-notes excerpts and short AI-style summaries
-- tracks stars/forks momentum and security advisory signals
-- renders cleaner email-safe repo cards with human-readable metrics (`1.2k`, `169k`)
-- separates release-tracked repos from non-release ecosystem repos via **OpenClaw Ecosystem Watch**
-- caches repeated GitHub metadata fetches for faster reruns and previews
-- generates digest JSON
-- renders HTML email digests
-- sends email through IMM-Romania
+Most release feeds are noisy:
+- raw release notes are messy
+- important changes are buried
+- repo context is missing
+- non-release ecosystem projects get mixed with actual shipped versions
 
-## Naming convention
+GitHub Release Watch fixes that by producing a digest that is:
+- **release-focused** — tracks stable published releases only
+- **digest-friendly** — clean summaries, better grouping, less repetition
+- **email-safe** — Outlook-friendly HTML cards
+- **practical** — includes semver, stars/forks, advisories, cadence, and ecosystem watch
 
-- **GitHub repo:** `asistent-alex/openclaw-github-release-watch`
-- **Public name:** `GitHub Release Watch`
-- **Skill slug / local skill folder:** `github-release-watch`
+## What you get
 
-## Repository layout
+- stable-only GitHub release monitoring (`draft=false`, `prerelease=false`)
+- local state for delta-aware checks
+- semantic version classification (`major`, `minor`, `patch`, `non-semver`)
+- cleaned release-note excerpts
+- stars/forks context with human-readable formatting (`1.2k`, `169k`)
+- security advisory signal
+- categorized digest rendering
+- separate **OpenClaw Ecosystem Watch** section for interesting repos without releases
+- HTML email digest delivery through IMM-Romania
+- cached GitHub metadata for faster reruns and previews
 
-```text
-modules/release_watch/        Core checker, config, and digest renderer
-scripts/release-watch.py      Main CLI entrypoint
-scripts/release-watch-email.sh Email wrapper via IMM-Romania
-data/                         Example config + local state files
-tests/                        Checker and HTML renderer tests
-references/                   Setup and workflow notes
-```
+## Quick start for humans
 
-## Real setup
+### 1. Requirements
 
-### Prerequisites
+Core checker / renderer:
+- Python 3
+- optional but recommended: `GITHUB_TOKEN`
 
-Required to use the checker and digest renderer:
+Email delivery only:
+- local `imm-romania` skill install
+- expected default path: `~/.openclaw/skills/imm-romania`
+- required entrypoint: `scripts/imm-romania.py`
 
-- **Python 3**
-- GitHub API access to the repositories you want to monitor
-- recommended: **`GITHUB_TOKEN`** for reliable rate limits
-
-Required only for email delivery:
-
-- local **IMM-Romania** skill install
-- default expected path: `~/.openclaw/skills/imm-romania`
-- required entrypoint inside that skill: `scripts/imm-romania.py`
-
-Important:
-- the main checker and digest renderer work **without** IMM-Romania
-- the email wrapper does **not** send mail without IMM-Romania
-- this repo does **not** currently expose formal packaging via `pyproject.toml` or `requirements.txt`; run it directly from the repo root with `python3`
-
-### GitHub token
-
-Public repositories can be checked anonymously, but authenticated access is strongly recommended.
-
-Supported token sources:
-
-1. `GITHUB_TOKEN` environment variable
-2. `~/.openclaw/openclaw.json` with `env.GITHUB_TOKEN`
-
-Example:
-
-```bash
-export GITHUB_TOKEN=ghp_your_token_here
-```
-
-### Config and state files
-
-Default paths used by the code:
-
-- config: `data/github-release-watch-repos.json`
-- example config: `data/github-release-watch-repos.example.json`
-- state: `data/github-release-watch-state.json`
-
-A practical local bootstrap is:
+### 2. Create a config
 
 ```bash
 cp data/github-release-watch-repos.example.json data/github-release-watch-repos.json
 ```
 
-Then edit the live config and set at minimum:
+Then edit:
+- `recipient`
+- `repos`
+- optional `categories`
+- optional `interesting_repos`
 
-- `recipient` — email recipient for the digest wrapper
-- `repos` — flat list of `owner/repo` values for release-based monitoring
-- optional `categories` — grouped sections for the rendered HTML digest
-- optional `interesting_repos` — non-release ecosystem repos rendered separately in **OpenClaw Ecosystem Watch**
+### 3. Run it
 
-Example config shape:
+Inspect configured repos:
+
+```bash
+python3 scripts/release-watch.py repos \
+  --config data/github-release-watch-repos.json
+```
+
+Run a release check:
+
+```bash
+python3 scripts/release-watch.py check \
+  --config data/github-release-watch-repos.json
+```
+
+Generate a digest:
+
+```bash
+python3 scripts/release-watch.py digest \
+  --check \
+  --config data/github-release-watch-repos.json
+```
+
+Send the email digest:
+
+```bash
+bash scripts/release-watch-email.sh
+```
+
+## Example config
 
 ```json
 {
@@ -101,18 +94,20 @@ Example config shape:
   "recipient": "ops@example.com",
   "categories": [
     {
-      "name": "AI Agents",
-      "emoji": "🤖",
-      "description": "Agent runtimes and orchestration tools",
+      "name": "OpenClaw Ecosystem",
+      "emoji": "🦀",
+      "description": "Platforma, extensii și produse din ecosistemul OpenClaw.",
       "repos": [
         "openclaw/openclaw",
-        "Martian-Engineering/lossless-claw"
+        "Martian-Engineering/lossless-claw",
+        "DenchHQ/DenchClaw"
       ]
     }
   ],
   "repos": [
     "openclaw/openclaw",
-    "Martian-Engineering/lossless-claw"
+    "Martian-Engineering/lossless-claw",
+    "DenchHQ/DenchClaw"
   ],
   "interesting_repos": [
     {
@@ -125,122 +120,114 @@ Example config shape:
 }
 ```
 
-The state file is created and updated automatically by the checker.
+## For agents and contributors
+
+If you are working on the repo itself:
+- read **`AGENTS.md`** for agent/contributor-specific guidance
+- read **`SKILL.md`** for the OpenClaw skill contract
+
+Short version:
+- `repos` = release-tracked repos
+- `interesting_repos` = ecosystem visibility, not release status
+- keep README human-first
+- keep cron summaries deterministic
+- do not reintroduce duplicate signals like `Same` + `Unchanged`
+
+## Repo layout
+
+```text
+modules/release_watch/         Core checker, config, and digest renderer
+scripts/release-watch.py       Main CLI entrypoint
+scripts/release-watch-email.sh Email wrapper via IMM-Romania
+data/                          Example config + local state files
+tests/                         Checker and HTML renderer tests
+references/                    Setup and workflow notes
+AGENTS.md                      Agent/contributor notes
+SKILL.md                       OpenClaw skill metadata and contract
+```
+
+## Token and config details
+
+### GitHub token sources
+
+Supported token sources:
+1. `GITHUB_TOKEN` environment variable
+2. `~/.openclaw/openclaw.json` with `env.GITHUB_TOKEN`
+
+Example:
+
+```bash
+export GITHUB_TOKEN=ghp_your_token_here
+```
+
+### Default files
+
+- config: `data/github-release-watch-repos.json`
+- example config: `data/github-release-watch-repos.example.json`
+- state: `data/github-release-watch-state.json`
+
+The state file is created automatically.
 Do not commit live state or private local config.
 
-## Environment variables actually used
+## Environment variables
 
-### Core GitHub Release Watch variables
+### Core GitHub Release Watch
 
-- `GITHUB_TOKEN` — GitHub API token
-- `GITHUB_RELEASE_WATCH_REPOS` — comma-separated repo override
-- `GITHUB_RELEASE_WATCH_RECIPIENT` — digest recipient override
-- `GITHUB_RELEASE_WATCH_CONFIG_PATH` — override config path for the email wrapper
-- `GITHUB_RELEASE_WATCH_STATE_PATH` — override saved state path for the email wrapper
+- `GITHUB_TOKEN`
+- `GITHUB_RELEASE_WATCH_REPOS`
+- `GITHUB_RELEASE_WATCH_RECIPIENT`
+- `GITHUB_RELEASE_WATCH_CONFIG_PATH`
+- `GITHUB_RELEASE_WATCH_STATE_PATH`
 
-### IMM-Romania integration variable
+### IMM-Romania integration
 
-- `IMM_ROMANIA_PATH` — override local path to the IMM-Romania skill
+- `IMM_ROMANIA_PATH`
 
 Notes:
 - repo overrides force the checker enabled even without a config file
-- if no repos are configured, the checker exits cleanly in disabled/no-op mode
+- if no repos are configured, the checker exits cleanly in no-op mode
 - the email wrapper also exits cleanly when there is no config or no recipient
 
-## Quick start
+## Email wrapper behavior
 
-### 1. Inspect the CLI
-
-```bash
-python3 scripts/release-watch.py --help
-```
-
-### 2. List configured repositories
-
-```bash
-python3 scripts/release-watch.py repos \
-  --config data/github-release-watch-repos.example.json
-```
-
-### 3. Run a release check
-
-```bash
-python3 scripts/release-watch.py check \
-  --config data/github-release-watch-repos.example.json
-```
-
-### 4. Generate a digest from a fresh check
-
-```bash
-python3 scripts/release-watch.py digest \
-  --check \
-  --config data/github-release-watch-repos.example.json
-```
-
-### 5. Review saved status
-
-```bash
-python3 scripts/release-watch.py status \
-  --config data/github-release-watch-repos.example.json
-```
-
-## Email delivery workflow
-
-Use the wrapper when you want the digest rendered and mailed through IMM-Romania:
-
-```bash
-bash scripts/release-watch-email.sh
-```
-
-The wrapper behavior is:
+`bash scripts/release-watch-email.sh` does this:
 
 1. resolve config/state paths
-2. resolve recipient from `GITHUB_RELEASE_WATCH_RECIPIENT` or config JSON
+2. resolve recipient from env or config
 3. run `release-watch.py digest --check`
 4. render HTML via `modules/release_watch/render_digest.py`
-5. send HTML mail through IMM-Romania when HTML is valid
-6. fall back to plain-text body if HTML rendering is invalid
-7. emit one short deterministic operational summary for cron history
+5. send HTML mail through IMM-Romania when valid
+6. fall back to plain-text body if needed
+7. emit one short deterministic cron summary
 
 If `IMM_ROMANIA_PATH` is wrong or IMM-Romania is missing, the wrapper fails loudly.
-If no config or recipient exists, it exits cleanly without sending.
+If no config or recipient exists, it exits cleanly.
 
 ## Testing
 
-Verified commands currently used in this repo:
+Current verification commands:
 
 ```bash
 python3 -m unittest tests/test_github_checker.py
 python3 tests/test_github_template.py
+bash -n scripts/release-watch-email.sh
 ```
 
-What these cover:
-
+What they cover:
 - checker state transitions
 - update detection and repo overrides
 - digest generation from saved state
 - categorized digest rendering
-- HTML template stability for update and empty-digest cases
+- ecosystem watch rendering
+- HTML template stability
 
 ## Operational notes
 
-- This project is stdlib-first and intentionally lightweight.
-- The checker stores local state so repeated runs can detect changes and deltas.
-- GitHub rate limits are much better with `GITHUB_TOKEN` than with anonymous requests.
-- Email delivery is a wrapper concern, not a requirement for local checking or digest generation.
-- The daily/cron use case is best served by the shell wrapper once config and recipient are in place.
-
-## Current feature set
-
-- stable-only release monitoring
-- semantic change classification
-- release-notes cleanup and short update summaries
-- stars / forks context with saved-state deltas and human-readable display
-- security advisory presence signal
-- categorized HTML digest rendering
-- separate **OpenClaw Ecosystem Watch** section for non-release repos
-- email-safe repo cards with reduced duplicate signals
-- cached GitHub metadata for faster reruns
+- this project is intentionally lightweight and stdlib-first
+- release checks use local state for change detection
+- repeated GitHub metadata fetches are cached for faster reruns
+- GitHub rate limits are much better with `GITHUB_TOKEN`
+- email delivery is optional; checking and rendering work without IMM-Romania
 
 ## References
 
