@@ -26,6 +26,7 @@ NO_CONFIG_MESSAGE = "No GitHub repositories configured"
 RELEASE_NOTES_MAX_LINES = 3
 RELEASE_NOTES_MAX_CHARS = 280
 REPO_HISTORY_MAX_ITEMS = 12
+RELEASE_HISTORY_LOOKBACK = 20
 CACHE_TTL_SECONDS = {
     "repo_info": 6 * 3600,
     "release_history": 3 * 3600,
@@ -480,7 +481,7 @@ class GitHubReleaseChecker:
             "days_since_last_release": None,
         }
         try:
-            history = self.get_release_history(repo, per_page=50)
+            history = self.get_release_history(repo, per_page=RELEASE_HISTORY_LOOKBACK)
             dates = [item.get("published_at") for item in history if item.get("published_at")]
             metrics["avg_release_interval_days"] = self._average_release_interval_days(dates)
             metrics["days_since_last_release"] = self._days_since(repo_state.get("published_at"))
@@ -635,7 +636,7 @@ class GitHubReleaseChecker:
         and computes trend from their real published_at dates and semver changes.
         """
         try:
-            releases = self.get_release_history(repo, per_page=50)
+            releases = self.get_release_history(repo, per_page=RELEASE_HISTORY_LOOKBACK)
         except Exception:
             return {"repo_trend": "stable", "repo_trend_reason": "could not fetch release history"}
 
