@@ -172,7 +172,7 @@ def _repo_context_html(item: dict[str, Any]) -> str:
             fork_text += f' ({_human_count(forks_delta) if int(forks_delta) < 0 else "+" + _human_count(forks_delta)})'
         parts.append(
             f'<span style="display:inline-block;color:{MUTED};font-size:13px;line-height:20px;white-space:nowrap;">'
-            f'&nbsp;·&nbsp;<span style="color:{MUTED};font-weight:bold;">⑂</span> {_esc(fork_text)}</span>'
+            f'&nbsp;·&nbsp;<span style="color:{MUTED};font-weight:bold;">Forks</span> {_esc(fork_text)}</span>'
         )
 
     if not parts:
@@ -438,7 +438,7 @@ def _ecosystem_card_html(item: dict[str, Any]) -> str:
     if stars is not None:
         meta_bits.append(f'★ {stars}')
     if forks is not None:
-        meta_bits.append(f'⑂ {forks}')
+        meta_bits.append(f'Forks: {forks}')
     if updated_at:
         meta_bits.append(f'Updated: {_published_label(updated_at)}')
     meta = ' · '.join(meta_bits)
