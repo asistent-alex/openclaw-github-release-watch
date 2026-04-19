@@ -12,6 +12,9 @@ GitHub Release Watch is a small Python-first skill for tracking stable GitHub re
 - classifies semantic version changes (`major`, `minor`, `patch`, `non-semver`)
 - extracts cleaned release-notes excerpts and short AI-style summaries
 - tracks stars/forks momentum and security advisory signals
+- renders cleaner email-safe repo cards with human-readable metrics (`1.2k`, `169k`)
+- separates release-tracked repos from non-release ecosystem repos via **OpenClaw Ecosystem Watch**
+- caches repeated GitHub metadata fetches for faster reruns and previews
 - generates digest JSON
 - renders HTML email digests
 - sends email through IMM-Romania
@@ -86,8 +89,9 @@ cp data/github-release-watch-repos.example.json data/github-release-watch-repos.
 Then edit the live config and set at minimum:
 
 - `recipient` — email recipient for the digest wrapper
-- `repos` — flat list of `owner/repo` values
+- `repos` — flat list of `owner/repo` values for release-based monitoring
 - optional `categories` — grouped sections for the rendered HTML digest
+- optional `interesting_repos` — non-release ecosystem repos rendered separately in **OpenClaw Ecosystem Watch**
 
 Example config shape:
 
@@ -109,6 +113,14 @@ Example config shape:
   "repos": [
     "openclaw/openclaw",
     "Martian-Engineering/lossless-claw"
+  ],
+  "interesting_repos": [
+    {
+      "repo": "ChatPRD/tradclaw",
+      "label": "Tradclaw",
+      "kind": "ecosystem",
+      "reason": "Interesting OpenClaw starter repo without GitHub releases yet."
+    }
   ]
 }
 ```
@@ -188,6 +200,7 @@ The wrapper behavior is:
 4. render HTML via `modules/release_watch/render_digest.py`
 5. send HTML mail through IMM-Romania when HTML is valid
 6. fall back to plain-text body if HTML rendering is invalid
+7. emit one short deterministic operational summary for cron history
 
 If `IMM_ROMANIA_PATH` is wrong or IMM-Romania is missing, the wrapper fails loudly.
 If no config or recipient exists, it exits cleanly without sending.
@@ -222,9 +235,12 @@ What these cover:
 - stable-only release monitoring
 - semantic change classification
 - release-notes cleanup and short update summaries
-- stars / forks context with saved-state deltas
+- stars / forks context with saved-state deltas and human-readable display
 - security advisory presence signal
 - categorized HTML digest rendering
+- separate **OpenClaw Ecosystem Watch** section for non-release repos
+- email-safe repo cards with reduced duplicate signals
+- cached GitHub metadata for faster reruns
 
 ## References
 
