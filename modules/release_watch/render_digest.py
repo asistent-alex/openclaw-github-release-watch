@@ -135,6 +135,22 @@ def _signal_badges_html(item: dict[str, Any]) -> str:
     return f'<div style="margin-top:8px;">{separator.join(badges)}</div>'
 
 
+def _human_count(value: Any) -> str:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return _esc(value)
+
+    abs_number = abs(number)
+    if abs_number < 1000:
+        return str(number)
+    if abs_number < 10000:
+        return f'{number / 1000:.1f}k'.replace('.0k', 'k')
+    if abs_number < 1_000_000:
+        return f'{round(number / 1000):.0f}k'
+    return f'{number / 1_000_000:.1f}M'.replace('.0M', 'M')
+
+
 def _repo_context_html(item: dict[str, Any]) -> str:
     parts = []
     stars = item.get("stars")
@@ -143,17 +159,17 @@ def _repo_context_html(item: dict[str, Any]) -> str:
     forks_delta = item.get("forks_delta")
 
     if stars is not None:
-        star_text = f'{stars}'
+        star_text = _human_count(stars)
         if stars_delta not in (None, 0):
-            star_text += f' ({stars_delta:+d})'
+            star_text += f' ({_human_count(stars_delta) if int(stars_delta) < 0 else "+" + _human_count(stars_delta)})'
         parts.append(
             f'<span style="display:inline-block;color:{MUTED};font-size:13px;line-height:20px;white-space:nowrap;">'
             f'&nbsp;·&nbsp;<span style="color:#eab308;font-weight:bold;">★</span> {_esc(star_text)}</span>'
         )
     if forks is not None:
-        fork_text = f'{forks}'
+        fork_text = _human_count(forks)
         if forks_delta not in (None, 0):
-            fork_text += f' ({forks_delta:+d})'
+            fork_text += f' ({_human_count(forks_delta) if int(forks_delta) < 0 else "+" + _human_count(forks_delta)})'
         parts.append(
             f'<span style="display:inline-block;color:{MUTED};font-size:13px;line-height:20px;white-space:nowrap;">'
             f'&nbsp;·&nbsp;<span style="color:{MUTED};font-weight:bold;">⑂</span> {_esc(fork_text)}</span>'
