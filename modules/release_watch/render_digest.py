@@ -114,11 +114,6 @@ def _badge(text: str, bg: str, fg: str, *, border: str | None = None) -> str:
 
 def _signal_badges_html(item: dict[str, Any]) -> str:
     badges: list[str] = []
-    semver = item.get("semver_change")
-    if semver:
-        semver_html = _semver_badge(semver)
-        if semver_html:
-            badges.append(semver_html)
 
     if item.get("has_security_advisories"):
         count = item.get("advisories_count")
@@ -219,7 +214,10 @@ def _summary_card(label: str, value: Any, bg: str, fg: str) -> str:
 
 
 def _status_badge_html(item: dict[str, Any]) -> str:
-    label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
+    status = str(item.get("status") or "unchanged")
+    if status == "unchanged":
+        return ""
+    label, bg, fg = _status_colors(status)
     return f'<span style="display:inline-block;vertical-align:middle;">&nbsp;·&nbsp;<span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-size:11px;line-height:16px;font-weight:bold;border:1px solid {bg};border-radius:999px;">{_esc(label)}</span></span>'
 
 
@@ -245,7 +243,8 @@ def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = Non
     desc_html = f'<div style="font-size:{H4}px;line-height:18px;color:{MUTED};">{_esc(desc)}</div>' if desc else ''
     context_html = _repo_context_html(item)
     status_html = _status_badge_html(item)
-    semver_html = _semver_badge(item.get("semver_change"))
+    semver_change = item.get("semver_change")
+    semver_html = "" if semver_change == "same" else _semver_badge(semver_change)
     version_html = f'<span style="display:inline-block;font-size:13px;line-height:20px;color:{TEXT};vertical-align:middle;">&nbsp;·&nbsp;{latest}{semver_html}</span>'
     timing_html = _timing_meta_html(item)
     signal_badges = _signal_badges_html(item)
