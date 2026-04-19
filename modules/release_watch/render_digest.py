@@ -140,26 +140,32 @@ def _signal_badges_html(item: dict[str, Any]) -> str:
 
 
 def _repo_context_html(item: dict[str, Any]) -> str:
-    bits = []
+    parts = []
     stars = item.get("stars")
     forks = item.get("forks")
     stars_delta = item.get("stars_delta")
     forks_delta = item.get("forks_delta")
 
     if stars is not None:
-        star_text = f'★ {stars}'
+        star_text = f'{stars}'
         if stars_delta not in (None, 0):
             star_text += f' ({stars_delta:+d})'
-        bits.append(star_text)
+        parts.append(
+            f'<span style="display:inline-block;margin-right:14px;color:{MUTED};">'
+            f'<span style="color:#eab308;font-weight:bold;">★</span> {_esc(star_text)}</span>'
+        )
     if forks is not None:
-        fork_text = f'⑂ {forks}'
+        fork_text = f'{forks}'
         if forks_delta not in (None, 0):
             fork_text += f' ({forks_delta:+d})'
-        bits.append(fork_text)
+        parts.append(
+            f'<span style="display:inline-block;margin-right:14px;color:{MUTED};">'
+            f'<span style="color:{MUTED};font-weight:bold;">⑂</span> {_esc(fork_text)}</span>'
+        )
 
-    if not bits:
+    if not parts:
         return ""
-    return f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(" • ".join(bits))}</div>'
+    return f'<div style="font-size:13px;line-height:20px;color:{MUTED};margin-top:5px;">{"".join(parts)}</div>'
 
 
 def _meaning_html(item: dict[str, Any], *, heading: bool = True) -> str:
@@ -250,7 +256,7 @@ def _render_highlights(results: list[dict[str, Any]]) -> str:
             f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
             '<tr>'
             f'<td valign="top" style="padding:14px 16px;">'
-            f'<div style="font-size:{H2}px;line-height:22px;font-weight:bold;color:{DARK};">{repo_link_html}</div>'
+            f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_link_html}</div>'
             f'{f"<div style=\"font-size:{H4}px;color:{MUTED};margin-top:2px;\">{desc}</div>" if desc else ""}'
             f'<div style="font-size:13px;line-height:20px;color:{TEXT};margin-top:6px;"><strong>{summary}</strong>{link_html}</div>'
             f'{signal_badges}'
@@ -331,7 +337,7 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
                     days_html = ' - '
                 label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
                 link = _esc(item.get("html_url") or "")
-                repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:{H2}px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:{H2}px;font-weight:bold;color:{DARK};">{repo}</span>'
+                repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:17px;line-height:24px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo}</span>'
                 desc = item.get("description") or ''
                 desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
                 context_html = _repo_context_html(item)
@@ -390,7 +396,7 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
                 days_html = ' - '
             label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
             link = _esc(item.get("html_url") or "")
-            repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:{H2}px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:{H2}px;font-weight:bold;color:{DARK};">{repo}</span>'
+            repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:17px;line-height:24px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo}</span>'
             desc = item.get("description") or ''
             desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
             context_html = _repo_context_html(item)
@@ -451,7 +457,7 @@ def _render_table(results: list[dict[str, Any]]) -> str:
             days_html = ' - '
         label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
         link = _esc(item.get("html_url") or "")
-        repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:{H2}px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:{H2}px;font-weight:bold;color:{DARK};">{repo}</span>'
+        repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:17px;line-height:24px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo}</span>'
         desc = item.get("description") or ''
         desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
         context_html = _repo_context_html(item)

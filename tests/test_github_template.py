@@ -82,8 +82,9 @@ def test_render_digest_contains_key_sections():
     assert 'Minor' in out
     assert 'Added smarter sync' in out
     assert 'AI Summary of updates' in out
-    assert '★ 120 (+5)' in out
-    assert '⑂ 18 (+2)' in out
+    assert '120 (+5)' in out
+    assert '18 (+2)' in out
+    assert '#eab308' in out
     assert 'Security (1)' in out
     assert 'Attention: High' in out
     assert 'Cadence: Speeding up' in out
