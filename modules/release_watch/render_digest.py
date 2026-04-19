@@ -106,7 +106,7 @@ def _trend_label(trend: Any) -> str:
 def _badge(text: str, bg: str, fg: str, *, border: str | None = None) -> str:
     border_color = border or bg
     return (
-        f'<span style="display:inline-block;margin:0 6px 6px 0;padding:2px 8px;'
+        f'<span style="display:inline-block;padding:2px 8px;'
         f'background:{bg};color:{fg};font-size:11px;line-height:16px;font-weight:bold;'
         f'border:1px solid {border_color};border-radius:999px;">{_esc(text)}</span>'
     )
@@ -136,7 +136,8 @@ def _signal_badges_html(item: dict[str, Any]) -> str:
 
     if not badges:
         return ""
-    return f'<div style="margin-top:8px;">{"".join(badges)}</div>'
+    separator = f'<span style="color:{MUTED};font-size:11px;line-height:16px;">&nbsp;·&nbsp;</span>'
+    return f'<div style="margin-top:8px;">{separator.join(badges)}</div>'
 
 
 def _repo_context_html(item: dict[str, Any]) -> str:
@@ -151,16 +152,16 @@ def _repo_context_html(item: dict[str, Any]) -> str:
         if stars_delta not in (None, 0):
             star_text += f' ({stars_delta:+d})'
         parts.append(
-            f'<span style="display:inline-block;margin-left:12px;color:{MUTED};font-size:13px;line-height:20px;white-space:nowrap;">'
-            f'<span style="color:#eab308;font-weight:bold;">★</span> {_esc(star_text)}</span>'
+            f'<span style="display:inline-block;color:{MUTED};font-size:13px;line-height:20px;white-space:nowrap;">'
+            f'&nbsp;·&nbsp;<span style="color:#eab308;font-weight:bold;">★</span> {_esc(star_text)}</span>'
         )
     if forks is not None:
         fork_text = f'{forks}'
         if forks_delta not in (None, 0):
             fork_text += f' ({forks_delta:+d})'
         parts.append(
-            f'<span style="display:inline-block;margin-left:12px;color:{MUTED};font-size:13px;line-height:20px;white-space:nowrap;">'
-            f'<span style="color:{MUTED};font-weight:bold;">⑂</span> {_esc(fork_text)}</span>'
+            f'<span style="display:inline-block;color:{MUTED};font-size:13px;line-height:20px;white-space:nowrap;">'
+            f'&nbsp;·&nbsp;<span style="color:{MUTED};font-weight:bold;">⑂</span> {_esc(fork_text)}</span>'
         )
 
     if not parts:
@@ -219,7 +220,7 @@ def _summary_card(label: str, value: Any, bg: str, fg: str) -> str:
 
 def _status_badge_html(item: dict[str, Any]) -> str:
     label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
-    return f'<span style="display:inline-block;margin-left:12px;padding:3px 8px;background:{bg};color:{fg};font-size:11px;line-height:16px;font-weight:bold;border:1px solid {bg};border-radius:999px;vertical-align:middle;">{_esc(label)}</span>'
+    return f'<span style="display:inline-block;vertical-align:middle;">&nbsp;·&nbsp;<span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-size:11px;line-height:16px;font-weight:bold;border:1px solid {bg};border-radius:999px;">{_esc(label)}</span></span>'
 
 
 def _timing_meta_html(item: dict[str, Any]) -> str:
@@ -245,7 +246,7 @@ def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = Non
     context_html = _repo_context_html(item)
     status_html = _status_badge_html(item)
     semver_html = _semver_badge(item.get("semver_change"))
-    version_html = f'<span style="display:inline-block;margin-left:12px;font-size:13px;line-height:20px;color:{TEXT};vertical-align:middle;">{latest}{semver_html}</span>'
+    version_html = f'<span style="display:inline-block;font-size:13px;line-height:20px;color:{TEXT};vertical-align:middle;">&nbsp;·&nbsp;{latest}{semver_html}</span>'
     timing_html = _timing_meta_html(item)
     signal_badges = _signal_badges_html(item)
     meaning_html = _detail_block_html(details_override, heading=show_summary_heading) if details_override is not None else _meaning_html(item, heading=show_summary_heading)
@@ -256,15 +257,7 @@ def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = Non
 def _render_highlights(results: list[dict[str, Any]]) -> str:
     items = [item for item in results if item.get("status") in {"updated", "first_seen", "error"}]
     if not items:
-        return (
-            '<tr><td style="padding:0 0 18px 0;">'
-            '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" '
-            f'style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
-            '<tr><td style="padding:16px 18px;">'
-            f'<div style="font-size:18px;line-height:24px;font-weight:bold;color:{DARK};margin-bottom:8px;">Highlights</div>'
-            f'<div style="font-size:14px;line-height:22px;color:{MUTED};">No new releases or errors this cycle. All tracked repositories are stable.</div>'
-            '</td></tr></table></td></tr>'
-        )
+        return ""
 
     entries = []
     for item in items:
