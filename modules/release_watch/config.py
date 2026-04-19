@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent.parent / "data" / "github-release-watch-repos.json"
 DEFAULT_STATE_PATH = Path(__file__).parent.parent.parent / "data" / "github-release-watch-state.json"
+DEFAULT_VIEWER_STARRED_LIMIT = 30
 
 
 def _normalize_repos(repos: Optional[List[str]]) -> List[str]:
@@ -54,6 +55,45 @@ def _normalize_interesting_repos(items: Optional[List[Dict[str, Any]]]) -> List[
     return normalized
 
 
+def _normalize_viewer_starred(raw: Any) -> Dict[str, Any]:
+    """Normalize authenticated viewer-starred settings."""
+    config: Dict[str, Any] = {
+        "enabled": False,
+        "limit": DEFAULT_VIEWER_STARRED_LIMIT,
+        "sort": "created",
+        "direction": "desc",
+    }
+
+    if raw in (None, False):
+        return config
+
+    if raw is True:
+        config["enabled"] = True
+        return config
+
+    if not isinstance(raw, dict):
+        return config
+
+    config["enabled"] = bool(raw.get("enabled", True))
+
+    try:
+        limit = int(raw.get("limit", DEFAULT_VIEWER_STARRED_LIMIT))
+    except (TypeError, ValueError):
+        limit = DEFAULT_VIEWER_STARRED_LIMIT
+    config["limit"] = max(1, min(limit, 100))
+
+    sort = str(raw.get("sort") or "created").strip().lower()
+    if sort not in {"created", "updated"}:
+        sort = "created"
+    config["sort"] = sort
+
+    direction = str(raw.get("direction") or "desc").strip().lower()
+    if direction not in {"asc", "desc"}:
+        direction = "desc"
+    config["direction"] = direction
+    return config
+
+
 def load_github_config(
     config_path: Optional[Path] = None,
     repo_overrides: Optional[List[str]] = None,
@@ -72,6 +112,7 @@ def load_github_config(
         "recipient": os.environ.get("GITHUB_RELEASE_WATCH_RECIPIENT"),
         "repos": [],
         "interesting_repos": [],
+        "viewer_starred": _normalize_viewer_starred(None),
         "config_path": str(path),
         "state_path": str(DEFAULT_STATE_PATH),
     }
@@ -87,6 +128,7 @@ def load_github_config(
                 config["repos"] = _normalize_repos(raw.get("repos", []))
                 config["interesting_repos"] = _normalize_interesting_repos(raw.get("interesting_repos", []))
                 config["categories"] = raw.get("categories", [])
+                config["viewer_starred"] = _normalize_viewer_starred(raw.get("viewer_starred"))
         except (json.JSONDecodeError, OSError):
             config["enabled"] = False
             config["error"] = f"Failed to load config from {path}"
@@ -100,7 +142,7 @@ def load_github_config(
         config["repos"] = _normalize_repos(repo_overrides)
         config["enabled"] = True
 
-    if not config["repos"]:
+    if not config["repos"] and not config.get("viewer_starred", {}).get("enabled"):
         config["enabled"] = False
 
     return config

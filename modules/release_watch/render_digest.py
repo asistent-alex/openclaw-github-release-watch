@@ -475,6 +475,70 @@ def _ecosystem_card_html(item: dict[str, Any]) -> str:
     )
 
 
+def _viewer_starred_badges_html(item: dict[str, Any]) -> str:
+    badges: list[str] = []
+    if item.get("tracked"):
+        badges.append(_badge("Already tracked", "#dbeafe", "#1d4ed8", border="#bfdbfe"))
+    else:
+        badges.append(_badge("Starred", "#fef3c7", "#92400e", border="#fde68a"))
+    if item.get("has_releases"):
+        label = f"Release: {item.get('latest_tag') or 'yes'}"
+        badges.append(_badge(label, "#dcfce7", "#166534", border="#bbf7d0"))
+    else:
+        badges.append(_badge("No releases", "#f3f4f6", "#374151", border="#e5e7eb"))
+    return '<div style="margin-top:8px;">' + f'<span style="color:{MUTED};font-size:11px;line-height:16px;">&nbsp;·&nbsp;</span>'.join(badges) + '</div>'
+
+
+def _viewer_starred_entry_html(item: dict[str, Any]) -> str:
+    repo = _esc(item.get("repo"))
+    link = _esc(item.get("html_url") or f'https://github.com/{repo}')
+    repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:17px;line-height:24px;font-weight:bold;">{repo}</a>'
+    desc = _esc(item.get("description") or "Starred repository from the authenticated GitHub account")
+    meta_bits = []
+    if item.get("stars") is not None:
+        meta_bits.append(f'★ {_human_count(item.get("stars"))}')
+    if item.get("forks") is not None:
+        meta_bits.append(f'Forks: {_human_count(item.get("forks"))}')
+    if item.get("language"):
+        meta_bits.append(str(item.get("language")))
+    if item.get("days_since_last_push") is not None:
+        meta_bits.append(f'Pushed {item.get("days_since_last_push")}d ago')
+    meta = ' · '.join(meta_bits)
+    release_excerpt = _esc(item.get("release_notes_excerpt") or "")
+    release_block = ""
+    if release_excerpt:
+        release_block = (
+            f'{_section_title_html("Latest release summary")}'
+            f'<div style="font-size:12px;line-height:18px;color:{TEXT};margin-top:4px;">{release_excerpt}</div>'
+        )
+    return (
+        '<tr>'
+        f'<td style="border-top:1px solid {BORDER};padding:0;">'
+        f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;width:100%;">'
+        f'<tr><td style="padding:14px 16px 0 16px;"><div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}</div></td></tr>'
+        f'<tr><td style="padding:6px 16px 0 16px;"><div style="font-size:12px;line-height:18px;color:{MUTED};">{desc}</div></td></tr>'
+        f'<tr><td style="padding:6px 16px 0 16px;"><div style="font-size:11px;line-height:16px;color:{MUTED};">{_esc(meta)}</div></td></tr>'
+        f'<tr><td style="padding:0 16px;">{_viewer_starred_badges_html(item)}</td></tr>'
+        f'<tr><td style="padding:8px 16px 14px 16px;">{release_block}</td></tr>'
+        '</table></td></tr>'
+    )
+
+
+def _render_viewer_starred(items: list[dict[str, Any]], summary: dict[str, Any] | None = None) -> str:
+    if not items:
+        return ""
+    login = _esc((summary or {}).get("login") or "authenticated user")
+    entries = ''.join(_viewer_starred_entry_html(item) for item in items)
+    return (
+        '<tr><td style="padding:0 0 18px 0;">'
+        f'<div style="font-size:18px;line-height:24px;font-weight:bold;color:{DARK};margin-bottom:10px;">Starred Projects</div>'
+        f'<div style="font-size:12px;line-height:18px;color:{MUTED};margin-bottom:10px;">Showing starred repositories for {login} from the authenticated GitHub account.</div>'
+        f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
+        + entries
+        + '</table></td></tr>'
+    )
+
+
 def _render_interesting_repos(items: list[dict[str, Any]]) -> str:
     if not items:
         return ""
@@ -533,6 +597,8 @@ def render_html(data: dict[str, Any]) -> str:
         updates_fg = "#0f766e"
 
     categories = list(data.get("categories") or [])
+    viewer_starred = list(data.get("viewer_starred") or [])
+    viewer_starred_summary = data.get("viewer_starred_summary") or {}
     interesting_repos = list(data.get("interesting_repos") or [])
 
     parts = [
@@ -559,6 +625,7 @@ def render_html(data: dict[str, Any]) -> str:
         '</tr></table>',
         _render_highlights(results),
         _render_categorized_table(results, categories) if categories else _render_table(results),
+        _render_viewer_starred(viewer_starred, viewer_starred_summary),
         _render_interesting_repos(interesting_repos),
         '<tr><td style="padding:0;">',
         '<div style="font-size:12px;line-height:18px;color:%s;">Next check: scheduled by cron.</div>' % MUTED,

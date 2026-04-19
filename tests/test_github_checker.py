@@ -17,15 +17,31 @@ from release_watch.checker import GitHubReleaseChecker
 class FakeChecker(GitHubReleaseChecker):
     """Test helper with injected API responses."""
 
-    def __init__(self, responses, repo_info=None, release_history=None, advisories=None, *args, **kwargs):
+    def __init__(self, responses, repo_info=None, release_history=None, advisories=None, viewer_starred=None, authenticated_user=None, *args, **kwargs):
         self._responses = responses
         self._repo_info = repo_info or {}
         self._release_history = release_history or {}
         self._advisories = advisories or {}
+        self._viewer_starred = viewer_starred or {"ok": True, "items": []}
+        self._authenticated_user = authenticated_user or {
+            "ok": True,
+            "login": "alex",
+            "name": "Alex",
+            "html_url": "https://github.com/alex",
+            "avatar_url": "https://avatars.example/alex.png",
+        }
         super().__init__(*args, **kwargs)
 
     def get_latest_release(self, repo: str):
-        response = self._responses[repo]
+        response = self._responses.get(repo)
+        if response is None:
+            return {
+                "ok": False,
+                "repo": repo,
+                "error": "not mocked",
+                "status": 404,
+                "rate_limit": {},
+            }
         return {"repo": repo, **response}
 
     def get_repo_info(self, repo: str):
@@ -36,6 +52,22 @@ class FakeChecker(GitHubReleaseChecker):
 
     def get_repo_advisories(self, repo: str, per_page: int = 10):
         return self._advisories.get(repo, [])
+
+    def get_authenticated_user(self):
+        return self._authenticated_user
+
+    def get_viewer_starred_repos(self, *, limit=None, sort=None, direction=None):
+        payload = dict(self._viewer_starred)
+        payload.setdefault("ok", True)
+        payload.setdefault("login", self._authenticated_user.get("login"))
+        payload.setdefault("name", self._authenticated_user.get("name"))
+        payload.setdefault("html_url", self._authenticated_user.get("html_url"))
+        payload.setdefault("avatar_url", self._authenticated_user.get("avatar_url"))
+        payload.setdefault("limit", limit)
+        payload.setdefault("sort", sort)
+        payload.setdefault("direction", direction)
+        payload.setdefault("items", [])
+        return payload
 
 
 class TestGitHubReleaseChecker(unittest.TestCase):
@@ -49,7 +81,7 @@ class TestGitHubReleaseChecker(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def write_config(self, repos, categories=None):
+    def write_config(self, repos, categories=None, viewer_starred=None):
         payload = {
             "enabled": True,
             "repos": repos,
@@ -57,6 +89,8 @@ class TestGitHubReleaseChecker(unittest.TestCase):
         }
         if categories is not None:
             payload["categories"] = categories
+        if viewer_starred is not None:
+            payload["viewer_starred"] = viewer_starred
         with open(self.config_path, "w", encoding="utf-8") as handle:
             json.dump(payload, handle)
 
@@ -752,6 +786,79 @@ class TestGitHubReleaseChecker(unittest.TestCase):
         result = checker.check_repos()
         item = result["results"][0]
         self.assertEqual(item["repo_trend"], "noisy")
+
+    def test_viewer_starred_is_loaded_from_config_and_status(self):
+        self.write_config([], viewer_starred={"enabled": True, "limit": 30, "sort": "created", "direction": "desc"})
+        checker = FakeChecker(
+            responses={},
+            viewer_starred={
+                "ok": True,
+                "items": [
+                    {"repo": "owner/starred", "html_url": "https://github.com/owner/starred", "description": "Starred repo"}
+                ],
+            },
+            repo_info={
+                "owner/starred": {
+                    "description": "Starred repo",
+                    "stargazers_count": 10,
+                    "forks_count": 2,
+                    "language": "Python",
+                    "pushed_at": "2026-04-10T00:00:00Z",
+                    "updated_at": "2026-04-11T00:00:00Z",
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        result = checker.check_repos()
+        self.assertEqual(len(result["viewer_starred"]), 1)
+        self.assertEqual(result["viewer_starred_summary"]["login"], "alex")
+        status = checker.get_status()
+        self.assertTrue(status["viewer_starred_enabled"])
+        self.assertEqual(status["viewer_starred_count"], 1)
+
+    def test_viewer_starred_marks_tracked_repos(self):
+        self.write_config(["owner/tracked"], viewer_starred={"enabled": True, "limit": 30})
+        checker = FakeChecker(
+            responses={
+                "owner/tracked": {
+                    "ok": True,
+                    "tag_name": "v1.0.0",
+                    "name": "v1.0.0",
+                    "published_at": "2026-04-09T00:00:00Z",
+                    "html_url": "https://github.com/owner/tracked/releases/tag/v1.0.0",
+                    "body": "stable",
+                    "prerelease": False,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            viewer_starred={
+                "ok": True,
+                "items": [
+                    {"repo": "owner/tracked", "html_url": "https://github.com/owner/tracked", "description": "Tracked and starred"}
+                ],
+            },
+            repo_info={
+                "owner/tracked": {
+                    "description": "Tracked and starred",
+                    "stargazers_count": 15,
+                    "forks_count": 3,
+                    "language": "Python",
+                    "pushed_at": "2026-04-10T00:00:00Z",
+                    "updated_at": "2026-04-11T00:00:00Z",
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        result = checker.check_repos()
+        starred_item = result["viewer_starred"][0]
+        self.assertTrue(starred_item["tracked"])
+        self.assertTrue(starred_item["has_releases"])
+        self.assertEqual(starred_item["latest_tag"], "v1.0.0")
 
 
 if __name__ == "__main__":

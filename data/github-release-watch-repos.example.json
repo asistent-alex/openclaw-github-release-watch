@@ -1,6 +1,12 @@
 {
   "enabled": true,
   "recipient": "ops@example.com",
+  "viewer_starred": {
+    "enabled": true,
+    "limit": 30,
+    "sort": "created",
+    "direction": "desc"
+  },
   "categories": [
     {
       "name": "AI Agents",
