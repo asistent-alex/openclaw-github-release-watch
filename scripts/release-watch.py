@@ -83,6 +83,7 @@ def main() -> None:
             "enabled": checker.config.get("enabled", False),
             "recipient": checker.config.get("recipient"),
             "repos": checker.config.get("repos", []),
+            "viewer_starred": checker.config.get("viewer_starred", {}),
             "config_path": checker.config.get("config_path"),
             "state_path": str(checker.state_path),
         }, indent=2))

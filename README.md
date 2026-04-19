@@ -53,6 +53,7 @@ cp data/github-release-watch-repos.example.json data/github-release-watch-repos.
 Then edit:
 - `recipient`
 - `repos`
+- optional `viewer_starred`
 - optional `categories`
 - optional `interesting_repos`
 
@@ -92,6 +93,12 @@ bash scripts/release-watch-email.sh
 {
   "enabled": true,
   "recipient": "ops@example.com",
+  "viewer_starred": {
+    "enabled": true,
+    "limit": 30,
+    "sort": "created",
+    "direction": "desc"
+  },
   "categories": [
     {
       "name": "OpenClaw Ecosystem",
@@ -128,6 +135,7 @@ If you are working on the repo itself:
 
 Short version:
 - `repos` = release-tracked repos
+- `viewer_starred` = authenticated user's starred repositories surfaced inside GRW
 - `interesting_repos` = ecosystem visibility, not release status
 - keep README human-first
 - keep cron summaries deterministic
@@ -216,6 +224,7 @@ bash -n scripts/release-watch-email.sh
 What they cover:
 - checker state transitions
 - update detection and repo overrides
+- authenticated viewer-starred fetch/state/render behavior
 - digest generation from saved state
 - categorized digest rendering
 - ecosystem watch rendering
@@ -236,6 +245,7 @@ This keeps the card compact while making the repo description distinct from the 
 
 - this project is intentionally lightweight and stdlib-first
 - release checks use local state for change detection
+- authenticated viewer-starred repos can be surfaced as a separate first-class section
 - repeated GitHub metadata fetches are cached for faster reruns
 - GitHub rate limits are much better with `GITHUB_TOKEN`
 - email delivery is optional; checking and rendering work without IMM-Romania

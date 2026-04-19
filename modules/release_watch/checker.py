@@ -9,9 +9,13 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib import error, request
+from urllib import error, parse, request
 
-from .config import DEFAULT_STATE_PATH, load_github_config
+from .config import (
+    DEFAULT_STATE_PATH,
+    DEFAULT_VIEWER_STARRED_LIMIT,
+    load_github_config,
+)
 
 try:  # Prefer IMM-Romania / Exchange logger when available.
     from exchange.logger import get_logger as _get_exchange_logger
@@ -20,7 +24,7 @@ except Exception:  # pragma: no cover - dependency may be absent in isolation
 
 
 GITHUB_API_VERSION = "2026-03-10"
-STATE_SCHEMA_VERSION = "1.0.0"
+STATE_SCHEMA_VERSION = "1.1.0"
 USER_AGENT = "openclaw-github-release-watch"
 NO_CONFIG_MESSAGE = "No GitHub repositories configured"
 RELEASE_NOTES_MAX_LINES = 3
@@ -31,6 +35,7 @@ CACHE_TTL_SECONDS = {
     "repo_info": 6 * 3600,
     "release_history": 3 * 3600,
     "advisories": 6 * 3600,
+    "viewer_starred": 30 * 60,
 }
 SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
 ATTENTION_KEYWORD_GROUPS = {
@@ -161,7 +166,12 @@ class GitHubReleaseChecker:
 
     def _load_state(self) -> Dict[str, Any]:
         if not self.state_path.exists():
-            return {"schema_version": STATE_SCHEMA_VERSION, "repos": {}, "api_cache": {}}
+            return {
+                "schema_version": STATE_SCHEMA_VERSION,
+                "repos": {},
+                "viewer_starred": {},
+                "api_cache": {},
+            }
         try:
             with open(self.state_path, "r", encoding="utf-8") as handle:
                 raw = json.load(handle)
@@ -169,13 +179,20 @@ class GitHubReleaseChecker:
                 raise ValueError("state must be a dict")
             if "repos" not in raw or not isinstance(raw["repos"], dict):
                 raw["repos"] = {}
+            if "viewer_starred" not in raw or not isinstance(raw["viewer_starred"], dict):
+                raw["viewer_starred"] = {}
             if "api_cache" not in raw or not isinstance(raw["api_cache"], dict):
                 raw["api_cache"] = {}
             raw.setdefault("schema_version", STATE_SCHEMA_VERSION)
             return raw
         except (json.JSONDecodeError, OSError, ValueError) as exc:
             _logger.warning(f"Failed to load GitHub checker state: {exc}")
-            return {"schema_version": STATE_SCHEMA_VERSION, "repos": {}, "api_cache": {}}
+            return {
+                "schema_version": STATE_SCHEMA_VERSION,
+                "repos": {},
+                "viewer_starred": {},
+                "api_cache": {},
+            }
 
     def _save_state(self, state: Dict[str, Any]) -> None:
         with open(self.state_path, "w", encoding="utf-8") as handle:
@@ -227,6 +244,7 @@ class GitHubReleaseChecker:
             "updates": 0,
             "failures": 0,
             "results": [],
+            "viewer_starred": [],
             "message": NO_CONFIG_MESSAGE,
         }
 
@@ -299,6 +317,132 @@ class GitHubReleaseChecker:
         data = result.get("data", [])
         normalized = data if isinstance(data, list) else []
         return self._cache_set("advisories", cache_key, normalized, CACHE_TTL_SECONDS["advisories"])
+
+    def get_authenticated_user(self) -> Dict[str, Any]:
+        """Fetch the authenticated GitHub user."""
+        cached = self._cache_get("viewer_starred", "authenticated_user")
+        if isinstance(cached, dict):
+            return cached
+        result = self._request_json("https://api.github.com/user")
+        if not result.get("ok"):
+            return {
+                "ok": False,
+                "error": result.get("error", "Unknown error"),
+                "status": result.get("status"),
+                "rate_limit": result.get("rate_limit", {}),
+            }
+        data = result.get("data", {})
+        normalized = {
+            "ok": True,
+            "login": data.get("login"),
+            "name": data.get("name"),
+            "html_url": data.get("html_url"),
+            "avatar_url": data.get("avatar_url"),
+        }
+        return self._cache_set("viewer_starred", "authenticated_user", normalized, CACHE_TTL_SECONDS["viewer_starred"])
+
+    def get_viewer_starred_repos(
+        self,
+        *,
+        limit: Optional[int] = None,
+        sort: Optional[str] = None,
+        direction: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Fetch repositories starred by the authenticated GitHub user."""
+        viewer_settings = self.config.get("viewer_starred", {})
+        resolved_limit = max(1, min(int(limit or viewer_settings.get("limit") or DEFAULT_VIEWER_STARRED_LIMIT), 100))
+        resolved_sort = str(sort or viewer_settings.get("sort") or "created").strip().lower()
+        if resolved_sort not in {"created", "updated"}:
+            resolved_sort = "created"
+        resolved_direction = str(direction or viewer_settings.get("direction") or "desc").strip().lower()
+        if resolved_direction not in {"asc", "desc"}:
+            resolved_direction = "desc"
+
+        cache_key = f"starred:{resolved_limit}:{resolved_sort}:{resolved_direction}"
+        cached = self._cache_get("viewer_starred", cache_key)
+        if isinstance(cached, dict):
+            return cached
+
+        user_info = self.get_authenticated_user()
+        if not user_info.get("ok"):
+            return {
+                "ok": False,
+                "error": user_info.get("error", "Authenticated GitHub user unavailable"),
+                "status": user_info.get("status"),
+                "rate_limit": user_info.get("rate_limit", {}),
+                "items": [],
+            }
+
+        items: List[Dict[str, Any]] = []
+        page = 1
+        per_page = min(100, resolved_limit)
+        latest_rate_limit: Dict[str, Any] = {}
+
+        while len(items) < resolved_limit:
+            query = parse.urlencode(
+                {
+                    "sort": resolved_sort,
+                    "direction": resolved_direction,
+                    "per_page": per_page,
+                    "page": page,
+                }
+            )
+            result = self._request_json(f"https://api.github.com/user/starred?{query}")
+            latest_rate_limit = result.get("rate_limit", latest_rate_limit)
+            if not result.get("ok"):
+                return {
+                    "ok": False,
+                    "error": result.get("error", "Failed to fetch authenticated starred repositories"),
+                    "status": result.get("status"),
+                    "rate_limit": latest_rate_limit,
+                    "items": [],
+                }
+
+            data = result.get("data", [])
+            if not isinstance(data, list) or not data:
+                break
+
+            for repo_info in data:
+                if not isinstance(repo_info, dict):
+                    continue
+                full_name = str(repo_info.get("full_name") or "").strip()
+                if not full_name or "/" not in full_name:
+                    continue
+                items.append(
+                    {
+                        "repo": full_name,
+                        "name": repo_info.get("name") or full_name.split("/")[-1],
+                        "description": repo_info.get("description"),
+                        "html_url": repo_info.get("html_url") or f"https://github.com/{full_name}",
+                        "stars": repo_info.get("stargazers_count"),
+                        "forks": repo_info.get("forks_count"),
+                        "language": repo_info.get("language"),
+                        "topics": repo_info.get("topics") if isinstance(repo_info.get("topics"), list) else [],
+                        "private": bool(repo_info.get("private", False)),
+                        "archived": bool(repo_info.get("archived", False)),
+                        "pushed_at": repo_info.get("pushed_at"),
+                        "updated_at": repo_info.get("updated_at"),
+                    }
+                )
+                if len(items) >= resolved_limit:
+                    break
+            if len(data) < per_page:
+                break
+            page += 1
+
+        payload = {
+            "ok": True,
+            "login": user_info.get("login"),
+            "name": user_info.get("name"),
+            "html_url": user_info.get("html_url"),
+            "avatar_url": user_info.get("avatar_url"),
+            "sort": resolved_sort,
+            "direction": resolved_direction,
+            "limit": resolved_limit,
+            "items": items[:resolved_limit],
+            "rate_limit": latest_rate_limit,
+        }
+        return self._cache_set("viewer_starred", cache_key, payload, CACHE_TTL_SECONDS["viewer_starred"])
 
     def _is_supported_release(self, release: Dict[str, Any]) -> bool:
         return not bool(release.get("draft")) and not bool(release.get("prerelease"))
@@ -629,12 +773,7 @@ class GitHubReleaseChecker:
         return history[-REPO_HISTORY_MAX_ITEMS:]
 
     def _repo_trend(self, repo: str) -> Dict[str, Any]:
-        """Compute repo trend from actual GitHub release history.
-
-        Instead of relying on the checker's own state history (which only accumulates
-        one entry per cron run), this fetches up to 50 recent releases from GitHub
-        and computes trend from their real published_at dates and semver changes.
-        """
+        """Compute repo trend from actual GitHub release history."""
         try:
             releases = self.get_release_history(repo, per_page=RELEASE_HISTORY_LOOKBACK)
         except Exception:
@@ -643,7 +782,6 @@ class GitHubReleaseChecker:
         if not isinstance(releases, list) or len(releases) < 3:
             return {"repo_trend": "new", "repo_trend_reason": "not enough GitHub releases yet"}
 
-        # Parse published_at dates from GitHub releases
         valid_dates: List[datetime] = []
         for rel in releases:
             if not isinstance(rel, dict):
@@ -657,7 +795,6 @@ class GitHubReleaseChecker:
         if len(valid_dates) < 3:
             return {"repo_trend": "new", "repo_trend_reason": "not enough dated GitHub releases"}
 
-        # Sort oldest-first for interval computation
         valid_dates.sort()
         intervals: List[float] = []
         for i in range(1, len(valid_dates)):
@@ -665,9 +802,8 @@ class GitHubReleaseChecker:
             if delta >= 0:
                 intervals.append(delta)
 
-        # Compute semver changes between consecutive tags (newest-first from API)
         tags = [rel.get("tag_name", "") for rel in releases if isinstance(rel, dict) and rel.get("tag_name")]
-        tags_chrono = list(reversed(tags))  # oldest-first
+        tags_chrono = list(reversed(tags))
         semver_list = []
         for i in range(1, len(tags_chrono)):
             change = self._classify_semver_change(tags_chrono[i - 1], tags_chrono[i])
@@ -681,7 +817,6 @@ class GitHubReleaseChecker:
         if major_count >= 2:
             return {"repo_trend": "volatile", "repo_trend_reason": "multiple major releases recently"}
 
-        # Check cadence trends before noisy — accelerating/slowing is more informative
         if len(intervals) >= 3:
             recent = intervals[-2:]
             previous = intervals[:-2]
@@ -708,13 +843,14 @@ class GitHubReleaseChecker:
     ) -> Dict[str, Any]:
         return {"repo": repo, "status": status, **repo_state, "rate_limit": rate_limit}
 
-    def _interesting_repo_items(self) -> List[Dict[str, Any]]:
+    def _interesting_repo_items(self, exclude_repos: Optional[set[str]] = None) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
+        excluded = exclude_repos or set()
         for item in self.config.get("interesting_repos", []):
             if not isinstance(item, dict):
                 continue
             repo = str(item.get("repo") or "").strip()
-            if not repo:
+            if not repo or repo in excluded:
                 continue
             repo_info = self.get_repo_info(repo)
             items.append(
@@ -734,17 +870,149 @@ class GitHubReleaseChecker:
             )
         return items
 
+    def _viewer_starred_items(self, state: Dict[str, Any]) -> List[Dict[str, Any]]:
+        snapshot = state.get("viewer_starred", {})
+        items = snapshot.get("items", []) if isinstance(snapshot, dict) else []
+        return items if isinstance(items, list) else []
+
+    def _build_viewer_starred_entry(self, repo: str, previous: Dict[str, Any], raw: Dict[str, Any], tracked_repos: set[str]) -> Dict[str, Any]:
+        repo_info = self.get_repo_info(repo)
+        merged = {**raw}
+        if isinstance(repo_info, dict):
+            merged["description"] = repo_info.get("description") or merged.get("description")
+            merged["stars"] = repo_info.get("stargazers_count", merged.get("stars"))
+            merged["forks"] = repo_info.get("forks_count", merged.get("forks"))
+            merged["open_issues"] = repo_info.get("open_issues_count")
+            merged["homepage"] = repo_info.get("homepage")
+            merged["topics"] = repo_info.get("topics") if isinstance(repo_info.get("topics"), list) else merged.get("topics", [])
+            merged["language"] = repo_info.get("language") or merged.get("language")
+            merged["private"] = bool(repo_info.get("private", merged.get("private", False)))
+            merged["archived"] = bool(repo_info.get("archived", merged.get("archived", False)))
+            merged["pushed_at"] = repo_info.get("pushed_at") or merged.get("pushed_at")
+            merged["updated_at"] = repo_info.get("updated_at") or merged.get("updated_at")
+
+        latest_release = self.get_latest_release(repo)
+        merged["tracked"] = repo in tracked_repos
+        merged["status"] = "tracked" if merged["tracked"] else "starred"
+        merged["has_releases"] = bool(latest_release.get("ok"))
+        merged["latest_tag"] = latest_release.get("tag_name") if latest_release.get("ok") else None
+        merged["latest_release_name"] = latest_release.get("name") if latest_release.get("ok") else None
+        merged["latest_release_url"] = latest_release.get("html_url") if latest_release.get("ok") else None
+        merged["release_notes_excerpt"] = self._clean_release_notes_excerpt(latest_release.get("body") or "") if latest_release.get("ok") else None
+        merged["days_since_last_push"] = self._days_since(merged.get("pushed_at"))
+        merged["email_priority"] = 0 if merged["tracked"] else (1 if merged["has_releases"] else 2)
+        previous_stars = previous.get("stars") if isinstance(previous, dict) else None
+        previous_forks = previous.get("forks") if isinstance(previous, dict) else None
+        if isinstance(merged.get("stars"), int) and isinstance(previous_stars, int):
+            merged["stars_delta"] = merged["stars"] - previous_stars
+        else:
+            merged["stars_delta"] = None
+        if isinstance(merged.get("forks"), int) and isinstance(previous_forks, int):
+            merged["forks_delta"] = merged["forks"] - previous_forks
+        else:
+            merged["forks_delta"] = None
+        if not str(merged.get("description") or "").strip():
+            merged["description"] = None
+        return merged
+
+    def _refresh_viewer_starred(self, state: Dict[str, Any], timestamp: str, tracked_repos: set[str]) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        settings = self.config.get("viewer_starred", {})
+        previous_snapshot = state.get("viewer_starred", {})
+        previous_items = previous_snapshot.get("items", []) if isinstance(previous_snapshot, dict) else []
+        previous_by_repo = {
+            item.get("repo"): item
+            for item in previous_items
+            if isinstance(item, dict) and item.get("repo")
+        }
+
+        if not settings.get("enabled"):
+            snapshot = {
+                "enabled": False,
+                "last_checked": timestamp,
+                "limit": settings.get("limit", DEFAULT_VIEWER_STARRED_LIMIT),
+                "items": [],
+                "count": 0,
+            }
+            state["viewer_starred"] = snapshot
+            return snapshot, {"enabled": False, "items": [], "count": 0}
+
+        starred = self.get_viewer_starred_repos(
+            limit=settings.get("limit"),
+            sort=settings.get("sort"),
+            direction=settings.get("direction"),
+        )
+        if not starred.get("ok"):
+            snapshot = {
+                "enabled": True,
+                "login": previous_snapshot.get("login"),
+                "name": previous_snapshot.get("name"),
+                "limit": settings.get("limit", DEFAULT_VIEWER_STARRED_LIMIT),
+                "items": previous_items if isinstance(previous_items, list) else [],
+                "count": len(previous_items) if isinstance(previous_items, list) else 0,
+                "last_checked": timestamp,
+                "error": starred.get("error"),
+            }
+            state["viewer_starred"] = snapshot
+            return snapshot, snapshot
+
+        items = []
+        for raw in starred.get("items", []):
+            if not isinstance(raw, dict):
+                continue
+            repo = raw.get("repo")
+            if not repo:
+                continue
+            items.append(self._build_viewer_starred_entry(repo, previous_by_repo.get(repo, {}), raw, tracked_repos))
+
+        items.sort(key=lambda item: (item.get("email_priority", 9), str(item.get("repo") or "").lower()))
+        untracked_items = [item for item in items if not item.get("tracked")]
+        shown_in_email = untracked_items[:10]
+        snapshot = {
+            "enabled": True,
+            "login": starred.get("login"),
+            "name": starred.get("name"),
+            "html_url": starred.get("html_url"),
+            "avatar_url": starred.get("avatar_url"),
+            "sort": starred.get("sort"),
+            "direction": starred.get("direction"),
+            "limit": starred.get("limit"),
+            "count": len(items),
+            "untracked_count": len(untracked_items),
+            "email_count": len(shown_in_email),
+            "tracked_count": sum(1 for item in items if item.get("tracked")),
+            "with_releases_count": sum(1 for item in untracked_items if item.get("has_releases")),
+            "without_releases_count": sum(1 for item in untracked_items if not item.get("has_releases")),
+            "items": items,
+            "items_for_email": shown_in_email,
+            "last_checked": timestamp,
+            "error": None,
+            "rate_limit": starred.get("rate_limit", {}),
+        }
+        state["viewer_starred"] = snapshot
+        return snapshot, snapshot
+
     def _snapshot_from_state(self, state: Dict[str, Any]) -> Dict[str, Any]:
         results = [
             {"repo": repo, **repo_state}
             for repo, repo_state in state.get("repos", {}).items()
         ]
+        viewer_starred_summary = state.get("viewer_starred", {})
+        viewer_starred_items = self._viewer_starred_items(state)
+        if isinstance(viewer_starred_summary, dict):
+            viewer_starred_items = viewer_starred_summary.get("items_for_email", viewer_starred_items)
+        starred_repos = {
+            item.get("repo")
+            for item in viewer_starred_items
+            if isinstance(item, dict) and item.get("repo")
+        }
         return {
             "ok": True,
             "enabled": bool(self.config.get("enabled")),
             "results": results,
+            "viewer_starred": viewer_starred_items,
+            "viewer_starred_summary": viewer_starred_summary,
             "categories": self.config.get("categories", []),
-            "interesting_repos": self._interesting_repo_items(),
+            "interesting_repos": self._interesting_repo_items(exclude_repos=starred_repos),
             "updates": sum(1 for item in results if item.get("status") == "updated"),
             "failures": sum(1 for item in results if item.get("status") == "error"),
             "last_run": state.get("last_run"),
@@ -753,42 +1021,57 @@ class GitHubReleaseChecker:
     def _build_digest_lines(self, snapshot: Dict[str, Any]) -> List[str]:
         lines = ["GitHub Releases Monitor", "======================", ""]
         results = snapshot.get("results", [])
-        if not results:
+        if results:
+            for item in results:
+                status = item.get("status", "unknown")
+                repo = item.get("repo")
+                extras = []
+                if item.get("has_security_advisories"):
+                    extras.append(f"security={item.get('advisories_count')}")
+                if item.get("stars_delta") not in (None, 0):
+                    extras.append(f"stars={item.get('stars_delta'):+d}")
+                if item.get("forks_delta") not in (None, 0):
+                    extras.append(f"forks={item.get('forks_delta'):+d}")
+                if item.get("release_attention"):
+                    extras.append(f"attention={item.get('release_attention')}")
+                if item.get("repo_trend"):
+                    extras.append(f"trend={item.get('repo_trend')}")
+                suffix = f" [{', '.join(extras)}]" if extras else ""
+                if status == "updated":
+                    lines.append(
+                        f"🆕 {repo}: {item.get('previous_tag')} -> {item.get('latest_tag')}{suffix}"
+                    )
+                elif status == "error":
+                    lines.append(f"⚠️ {repo}: {item.get('error')}{suffix}")
+                elif status == "first_seen":
+                    lines.append(f"👀 {repo}: first seen at {item.get('latest_tag')}{suffix}")
+                else:
+                    lines.append(f"✅ {repo}: {item.get('latest_tag')}{suffix}")
+        else:
             lines.append("No tracked repositories yet.")
-            return lines
 
-        for item in results:
-            status = item.get("status", "unknown")
-            repo = item.get("repo")
-            extras = []
-            if item.get("has_security_advisories"):
-                extras.append(f"security={item.get('advisories_count')}")
-            if item.get("stars_delta") not in (None, 0):
-                extras.append(f"stars={item.get('stars_delta'):+d}")
-            if item.get("forks_delta") not in (None, 0):
-                extras.append(f"forks={item.get('forks_delta'):+d}")
-            if item.get("release_attention"):
-                extras.append(f"attention={item.get('release_attention')}")
-            if item.get("repo_trend"):
-                extras.append(f"trend={item.get('repo_trend')}")
-            suffix = f" [{', '.join(extras)}]" if extras else ""
-            if status == "updated":
-                lines.append(
-                    f"🆕 {repo}: {item.get('previous_tag')} -> {item.get('latest_tag')}{suffix}"
-                )
-            elif status == "error":
-                lines.append(f"⚠️ {repo}: {item.get('error')}{suffix}")
-            elif status == "first_seen":
-                lines.append(f"👀 {repo}: first seen at {item.get('latest_tag')}{suffix}")
-            else:
-                lines.append(f"✅ {repo}: {item.get('latest_tag')}{suffix}")
+        viewer_starred = snapshot.get("viewer_starred", [])
+        if viewer_starred:
+            lines.extend(["", "Starred Projects Radar", "----------------------"])
+            for item in viewer_starred:
+                repo = item.get("repo")
+                labels = []
+                if item.get("has_releases"):
+                    labels.append(f"release={item.get('latest_tag') or 'yes'}")
+                else:
+                    labels.append("no-releases")
+                if item.get("days_since_last_push") is not None:
+                    labels.append(f"push={item.get('days_since_last_push')}d")
+                suffix = f" [{' , '.join(labels)}]" if labels else ""
+                lines.append(f"📡 {repo}{suffix}")
         return lines
 
     def check_repos(self) -> Dict[str, Any]:
         """Run release checks for configured repositories."""
         repos = self.config.get("repos", [])
+        viewer_starred_enabled = bool(self.config.get("viewer_starred", {}).get("enabled"))
         timestamp = self._now_iso()
-        if not self.config.get("enabled") or not repos:
+        if not self.config.get("enabled") and not viewer_starred_enabled:
             return self._build_empty_check_result(timestamp)
 
         state = self._load_state()
@@ -844,6 +1127,15 @@ class GitHubReleaseChecker:
                 )
             )
 
+        viewer_starred_snapshot, viewer_starred_output = self._refresh_viewer_starred(
+            state,
+            timestamp,
+            tracked_repos=set(repos),
+        )
+        if viewer_starred_snapshot.get("error"):
+            failures += 1
+        latest_rate_limit = viewer_starred_snapshot.get("rate_limit", latest_rate_limit)
+
         state["last_run"] = timestamp
         self._save_state(state)
 
@@ -855,8 +1147,14 @@ class GitHubReleaseChecker:
             "updates": updates,
             "failures": failures,
             "results": results,
+            "viewer_starred": viewer_starred_output.get("items_for_email", viewer_starred_output.get("items", [])),
+            "viewer_starred_summary": viewer_starred_snapshot,
             "categories": self.config.get("categories", []),
-            "interesting_repos": self._interesting_repo_items(),
+            "interesting_repos": self._interesting_repo_items(exclude_repos={
+                item.get("repo")
+                for item in viewer_starred_output.get("items", [])
+                if isinstance(item, dict) and item.get("repo")
+            }),
             "rate_limit": latest_rate_limit,
             "state_path": str(self.state_path),
         }
@@ -865,17 +1163,23 @@ class GitHubReleaseChecker:
         """Return current checker status from saved state."""
         state = self._load_state()
         repos = state.get("repos", {})
+        viewer_starred_snapshot = state.get("viewer_starred", {})
         updates = sum(
             1 for repo_state in repos.values() if repo_state.get("status") == "updated"
         )
         failures = sum(
             1 for repo_state in repos.values() if repo_state.get("status") == "error"
         )
+        if isinstance(viewer_starred_snapshot, dict) and viewer_starred_snapshot.get("error"):
+            failures += 1
         return {
             "ok": True,
             "enabled": bool(self.config.get("enabled")),
             "configured_repos": self.config.get("repos", []),
             "tracked_repos": list(repos.keys()),
+            "viewer_starred_enabled": bool(self.config.get("viewer_starred", {}).get("enabled")),
+            "viewer_starred_count": viewer_starred_snapshot.get("count", 0) if isinstance(viewer_starred_snapshot, dict) else 0,
+            "viewer_starred_login": viewer_starred_snapshot.get("login") if isinstance(viewer_starred_snapshot, dict) else None,
             "updates": updates,
             "failures": failures,
             "last_run": state.get("last_run"),
@@ -892,6 +1196,7 @@ class GitHubReleaseChecker:
                 "subject": "GitHub Release Watch — No repositories configured",
                 "body": NO_CONFIG_MESSAGE + ".",
                 "results": [],
+                "viewer_starred": [],
                 "categories": [],
             }
 
@@ -907,6 +1212,8 @@ class GitHubReleaseChecker:
             "subject": subject,
             "body": "\n".join(self._build_digest_lines(snapshot)),
             "results": snapshot.get("results", []),
+            "viewer_starred": snapshot.get("viewer_starred", []),
+            "viewer_starred_summary": snapshot.get("viewer_starred_summary", {}),
             "categories": snapshot.get("categories", []),
             "interesting_repos": snapshot.get("interesting_repos", []),
             "failures": snapshot.get("failures", 0),

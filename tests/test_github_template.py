@@ -43,6 +43,31 @@ TEST_DIGEST = {
             "avg_release_interval_days": 21,
         },
     ],
+    "viewer_starred_summary": {
+        "login": "alex",
+        "name": "Alex",
+        "count": 12,
+        "untracked_count": 1,
+        "email_count": 1,
+        "tracked_count": 11,
+        "with_releases_count": 1,
+        "without_releases_count": 0
+    },
+    "viewer_starred": [
+        {
+            "repo": "owner/starred",
+            "html_url": "https://github.com/owner/starred",
+            "description": "A starred repo surfaced from the authenticated account.",
+            "stars": 88,
+            "forks": 9,
+            "language": "Python",
+            "tracked": False,
+            "has_releases": True,
+            "latest_tag": "v2.4.0",
+            "release_notes_excerpt": "Adds better starred-project visibility.",
+            "days_since_last_push": 4
+        }
+    ],
     "interesting_repos": [
         {
             "repo": "ecosystem/tradclaw",
@@ -112,6 +137,17 @@ def test_render_digest_contains_key_sections():
     assert 'firmade.ai' in out
     assert 'openclaw-github-release-watch' in out
     assert '#1d4ed8' in out or '#38bdf8' in out
+    assert 'Starred Projects Radar' in out
+    assert 'Untracked repositories discovered from your GitHub stars' in out
+    assert 'Tracked by GRW' in out
+    assert 'Starred on GitHub' in out
+    assert 'Overlap' in out
+    assert 'Radar candidates:' in out
+    assert 'authenticated GitHub account' in out
+    assert '#7c3aed' in out or '#ddd6fe' in out
+    assert 'owner/starred' in out
+    assert 'Already tracked' not in out
+    assert 'Release: v2.4.0' in out
     assert 'OpenClaw Ecosystem Watch' in out
     assert 'Tradclaw' in out
     assert 'No releases yet' in out
