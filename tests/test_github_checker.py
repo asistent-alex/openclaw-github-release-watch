@@ -453,9 +453,40 @@ class TestGitHubReleaseChecker(unittest.TestCase):
         result = checker.check_repos()
         excerpt = result["results"][0]["release_notes_excerpt"]
         self.assertIsNotNone(excerpt)
-        self.assertIn("Highlights", excerpt)
         self.assertIn("Added smarter sync", excerpt)
+        self.assertIn("Fixed email rendering", excerpt)
+        self.assertNotIn("Highlights", excerpt)
         self.assertNotIn("[docs]", excerpt)
+        self.assertNotIn("https://example.com", excerpt)
+
+    def test_release_notes_excerpt_strips_changelog_noise(self):
+        self.write_config(["owner/repo"])
+        checker = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v1.0.0",
+                    "name": "v1.0.0",
+                    "published_at": "2026-04-10T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
+                    "body": "## What's Changed\n- Fix AI chat threads query firing for users without AI permissions by @thomtrp in https://github.com/twentyhq/twenty/pull/19507\n- i18n - translations by @github-actions[bot] in https://github.com/twentyhq/twenty/pull/19510\n\nThanks @someone!",
+                    "prerelease": False,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        result = checker.check_repos()
+        excerpt = result["results"][0]["release_notes_excerpt"]
+        self.assertIsNotNone(excerpt)
+        self.assertNotIn("What's Changed", excerpt)
+        self.assertNotIn("https://github.com", excerpt)
+        self.assertNotIn("by @", excerpt)
+        self.assertNotIn("Thanks @", excerpt)
+        self.assertIn("Fix AI chat threads query firing", excerpt)
 
     def test_repo_context_tracks_stars_forks_and_deltas(self):
         self.write_config(["owner/repo"])

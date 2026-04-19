@@ -283,20 +283,46 @@ class GitHubReleaseChecker:
     def _clean_release_notes_excerpt(self, body: str) -> Optional[str]:
         if not body:
             return None
+
         lines = []
+        noisy_headings = {
+            "what's changed",
+            "whats changed",
+            "what's new",
+            "whats new",
+            "changes",
+            "patch changes",
+            "highlights",
+        }
+
         for raw_line in body.splitlines():
             line = raw_line.strip()
             if not line:
                 continue
+
             line = re.sub(r"^[-*+]\s*", "", line)
             line = re.sub(r"^#+\s*", "", line)
             line = re.sub(r"\[(.*?)\]\((.*?)\)", r"\1", line)
             line = re.sub(r"`([^`]*)`", r"\1", line)
+            line = re.sub(r"\*\*(.*?)\*\*", r"\1", line)
+            line = re.sub(r"\*(.*?)\*", r"\1", line)
+            line = re.sub(r"\bby\s+@[A-Za-z0-9_.-]+\b", "", line)
+            line = re.sub(r"\bin\s+https?://\S+", "", line)
+            line = re.sub(r"https?://\S+", "", line)
+            line = re.sub(r"\s*\(#\d+\)", "", line)
+            line = re.sub(r"\s{2,}", " ", line).strip(" -–—:•")
+
+            lowered = line.lower()
+            if lowered in noisy_headings:
+                continue
+            if lowered.startswith("thanks @"):
+                continue
             if len(line) < 4:
                 continue
             lines.append(line)
             if len(lines) >= RELEASE_NOTES_MAX_LINES:
                 break
+
         if not lines:
             return None
         excerpt = " • ".join(lines)
