@@ -151,7 +151,7 @@ def _repo_context_html(item: dict[str, Any]) -> str:
         if stars_delta not in (None, 0):
             star_text += f' ({stars_delta:+d})'
         parts.append(
-            f'<span style="display:inline-block;margin-right:14px;color:{MUTED};">'
+            f'<span style="display:inline-block;margin-left:12px;color:{MUTED};font-size:13px;line-height:20px;white-space:nowrap;">'
             f'<span style="color:#eab308;font-weight:bold;">★</span> {_esc(star_text)}</span>'
         )
     if forks is not None:
@@ -159,13 +159,13 @@ def _repo_context_html(item: dict[str, Any]) -> str:
         if forks_delta not in (None, 0):
             fork_text += f' ({forks_delta:+d})'
         parts.append(
-            f'<span style="display:inline-block;margin-right:14px;color:{MUTED};">'
+            f'<span style="display:inline-block;margin-left:12px;color:{MUTED};font-size:13px;line-height:20px;white-space:nowrap;">'
             f'<span style="color:{MUTED};font-weight:bold;">⑂</span> {_esc(fork_text)}</span>'
         )
 
     if not parts:
         return ""
-    return f'<div style="font-size:13px;line-height:20px;color:{MUTED};margin-top:5px;">{"".join(parts)}</div>'
+    return ''.join(parts)
 
 
 def _meaning_html(item: dict[str, Any], *, heading: bool = True) -> str:
@@ -256,7 +256,7 @@ def _render_highlights(results: list[dict[str, Any]]) -> str:
             f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
             '<tr>'
             f'<td valign="top" style="padding:14px 16px;">'
-            f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_link_html}</div>'
+            f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_link_html}{_repo_context_html(item)}</div>'
             f'{f"<div style=\"font-size:{H4}px;color:{MUTED};margin-top:2px;\">{desc}</div>" if desc else ""}'
             f'<div style="font-size:13px;line-height:20px;color:{TEXT};margin-top:6px;"><strong>{summary}</strong>{link_html}</div>'
             f'{signal_badges}'
@@ -345,9 +345,10 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
                 meaning_html = _meaning_html(item, heading=True)
                 semver_html = _semver_badge(item.get("semver_change"))
                 latest_html = f'{latest}{semver_html}'
+                heading_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}</div>'
                 rows.append(
                     '<tr>'
-                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}{signal_badges}{meaning_html}</td>'
+                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{heading_html}{desc_html}{signal_badges}{meaning_html}</td>'
                     f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest_html}</td>'
                     f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
                     f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
@@ -402,9 +403,10 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
             context_html = _repo_context_html(item)
             signal_badges = _signal_badges_html(item)
             meaning_html = _meaning_html(item, heading=True)
+            heading_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}</div>'
             rows.append(
                 '<tr>'
-                f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}{signal_badges}{meaning_html}</td>'
+                f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{heading_html}{desc_html}{signal_badges}{meaning_html}</td>'
                 f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest}</td>'
                 f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
                 f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
@@ -465,9 +467,10 @@ def _render_table(results: list[dict[str, Any]]) -> str:
         meaning_html = _meaning_html(item, heading=True)
         semver_html = _semver_badge(item.get("semver_change"))
         latest_html = f'{latest}{semver_html}'
+        heading_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}</div>'
         rows.append(
             '<tr>'
-            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{repo_html}{desc_html}{context_html}{signal_badges}{meaning_html}</td>'
+            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{heading_html}{desc_html}{signal_badges}{meaning_html}</td>'
             f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest_html}</td>'
             f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
             f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
