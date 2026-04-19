@@ -214,6 +214,42 @@ def _summary_card(label: str, value: Any, bg: str, fg: str) -> str:
     )
 
 
+def _status_badge_html(item: dict[str, Any]) -> str:
+    label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
+    return f'<span style="display:inline-block;margin-left:12px;padding:3px 8px;background:{bg};color:{fg};font-size:11px;line-height:16px;font-weight:bold;border:1px solid {bg};border-radius:999px;vertical-align:middle;">{_esc(label)}</span>'
+
+
+def _timing_meta_html(item: dict[str, Any]) -> str:
+    days_since = item.get("days_since_last_release")
+    avg = item.get("avg_release_interval_days")
+    parts = []
+    if days_since is not None:
+        parts.append(f'Since: {days_since}d')
+    if avg is not None:
+        parts.append(f'Avg: {avg}d')
+    if not parts:
+        return ""
+    return f'<div style="font-size:12px;line-height:18px;color:{MUTED};margin-top:6px;">{_esc(" · ".join(parts))}</div>'
+
+
+def _repo_entry_html(item: dict[str, Any]) -> str:
+    repo = _esc(item.get("repo"))
+    latest = _esc(item.get("latest_tag") or "—")
+    link = _esc(item.get("html_url") or "")
+    repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:17px;line-height:24px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo}</span>'
+    desc = item.get("description") or ''
+    desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:3px;">{_esc(desc)}</div>' if desc else ''
+    context_html = _repo_context_html(item)
+    status_html = _status_badge_html(item)
+    semver_html = _semver_badge(item.get("semver_change"))
+    version_html = f'<span style="display:inline-block;margin-left:12px;font-size:13px;line-height:20px;color:{TEXT};vertical-align:middle;">{latest}{semver_html}</span>'
+    timing_html = _timing_meta_html(item)
+    signal_badges = _signal_badges_html(item)
+    meaning_html = _meaning_html(item, heading=True)
+    heading_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}{status_html}{version_html}</div>'
+    return f'<div style="padding:12px 14px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{heading_html}{desc_html}{timing_html}{signal_badges}{meaning_html}</div>'
+
+
 def _render_highlights(results: list[dict[str, Any]]) -> str:
     items = [item for item in results if item.get("status") in {"updated", "first_seen", "error"}]
     if not items:
@@ -320,51 +356,11 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
                 '</td></tr>'
             )
 
-            # Table for this category
-            rows = []
-            for item in cat_items:
-                repo = _esc(item.get("repo"))
-                latest = _esc(item.get("latest_tag") or "—")
-                days_since = item.get("days_since_last_release")
-                avg = item.get("avg_release_interval_days")
-                if days_since is not None and avg is not None:
-                    days_html = f'{days_since} / {avg}'
-                elif days_since is not None:
-                    days_html = f'{days_since} / -'
-                elif avg is not None:
-                    days_html = f'- / {avg}'
-                else:
-                    days_html = ' - '
-                label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
-                link = _esc(item.get("html_url") or "")
-                repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:17px;line-height:24px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo}</span>'
-                desc = item.get("description") or ''
-                desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
-                context_html = _repo_context_html(item)
-                signal_badges = _signal_badges_html(item)
-                meaning_html = _meaning_html(item, heading=True)
-                semver_html = _semver_badge(item.get("semver_change"))
-                latest_html = f'{latest}{semver_html}'
-                heading_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}</div>'
-                rows.append(
-                    '<tr>'
-                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{heading_html}{desc_html}{signal_badges}{meaning_html}</td>'
-                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest_html}</td>'
-                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
-                    f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
-                    '</tr>'
-                )
-
+            entries = ''.join(_repo_entry_html(item) for item in cat_items)
             table = (
                 '<tr><td style="padding:0 0 4px 0;">'
                 f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
-                '<tr>'
-                f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Repository</td>'
-                f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Version</td>'
-                f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Since / Avg (days)</td>'
-                f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Status</td>'
-                '</tr>'
-                + ''.join(rows)
+                + entries
                 + '</table></td></tr>'
             )
 
@@ -381,47 +377,11 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
             f'<div style="font-size:16px;line-height:22px;font-weight:bold;color:{DARK};">📋 Uncategorized</div>'
             '</td></tr>'
         )
-        rows = []
-        for item in uncategorized:
-            repo = _esc(item.get("repo"))
-            latest = _esc(item.get("latest_tag") or "—")
-            days_since = item.get("days_since_last_release")
-            avg = item.get("avg_release_interval_days")
-            if days_since is not None and avg is not None:
-                days_html = f'{days_since} / {avg}'
-            elif days_since is not None:
-                days_html = f'{days_since} / -'
-            elif avg is not None:
-                days_html = f'- / {avg}'
-            else:
-                days_html = ' - '
-            label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
-            link = _esc(item.get("html_url") or "")
-            repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:17px;line-height:24px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo}</span>'
-            desc = item.get("description") or ''
-            desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
-            context_html = _repo_context_html(item)
-            signal_badges = _signal_badges_html(item)
-            meaning_html = _meaning_html(item, heading=True)
-            heading_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}</div>'
-            rows.append(
-                '<tr>'
-                f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{heading_html}{desc_html}{signal_badges}{meaning_html}</td>'
-                f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest}</td>'
-                f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
-                f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
-                '</tr>'
-            )
+        entries = ''.join(_repo_entry_html(item) for item in uncategorized)
         table = (
             '<tr><td style="padding:0 0 4px 0;">'
             f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
-            '<tr>'
-            f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Repository</td>'
-            f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Version</td>'
-            f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Since / Avg (days)</td>'
-            f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Status</td>'
-            '</tr>'
-            + ''.join(rows)
+            + entries
             + '</table></td></tr>'
         )
         category_sections.append(header + table)
@@ -442,52 +402,12 @@ def _render_table(results: list[dict[str, Any]]) -> str:
             '</td></tr>'
         )
 
-    rows = []
-    for item in results:
-        repo = _esc(item.get("repo"))
-        latest = _esc(item.get("latest_tag") or "—")
-        # compute days since / avg
-        days_since = item.get("days_since_last_release")
-        avg = item.get("avg_release_interval_days")
-        if days_since is not None and avg is not None:
-            days_html = f'{days_since} / {avg}'
-        elif days_since is not None:
-            days_html = f'{days_since} / -'
-        elif avg is not None:
-            days_html = f'- / {avg}'
-        else:
-            days_html = ' - '
-        label, bg, fg = _status_colors(str(item.get("status") or "unchanged"))
-        link = _esc(item.get("html_url") or "")
-        repo_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;font-size:17px;line-height:24px;font-weight:bold;">{repo}</a>' if link else f'<span style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo}</span>'
-        desc = item.get("description") or ''
-        desc_html = f'<div style="font-size:{H4}px;color:{MUTED};margin-top:4px;">{_esc(desc)}</div>' if desc else ''
-        context_html = _repo_context_html(item)
-        signal_badges = _signal_badges_html(item)
-        meaning_html = _meaning_html(item, heading=True)
-        semver_html = _semver_badge(item.get("semver_change"))
-        latest_html = f'{latest}{semver_html}'
-        heading_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}</div>'
-        rows.append(
-            '<tr>'
-            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{heading_html}{desc_html}{signal_badges}{meaning_html}</td>'
-            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{latest_html}</td>'
-            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{_esc(days_html)}</td>'
-            f'<td style="padding:10px 12px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;"><span style="display:inline-block;padding:3px 8px;background:{bg};color:{fg};font-weight:bold;">{_esc(label)}</span></td>'
-            '</tr>'
-        )
-
+    entries = ''.join(_repo_entry_html(item) for item in results)
     return (
         '<tr><td style="padding:0 0 18px 0;">'
         f'<div style="font-size:18px;line-height:24px;font-weight:bold;color:{DARK};margin-bottom:10px;">Repository Status</div>'
         f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
-        '<tr>'
-        f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Repository</td>'
-        f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Version</td>'
-        f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Since / Avg (days)</td>'
-        f'<td style="padding:10px 12px;background:{TABLE_HEAD};font-size:12px;line-height:18px;font-weight:bold;color:{DARK};text-transform:uppercase;">Status</td>'
-        '</tr>'
-        + ''.join(rows)
+        + entries
         + '</table></td></tr>'
     )
 
