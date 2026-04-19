@@ -242,12 +242,12 @@ def _timing_meta_html(item: dict[str, Any]) -> str:
     avg = item.get("avg_release_interval_days")
     parts = []
     if days_since is not None:
-        parts.append(f'Since: {days_since}d')
+        parts.append(f'since {days_since}d')
     if avg is not None:
-        parts.append(f'Avg: {avg}d')
+        parts.append(f'avg {avg}d')
     if not parts:
         return ""
-    return f'<div style="font-size:11px;line-height:16px;color:{MUTED};margin-top:6px;">{_esc(" · ".join(parts))}</div>'
+    return _esc(" · ".join(parts))
 
 
 def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = None, show_summary_heading: bool = True) -> str:
@@ -265,7 +265,8 @@ def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = Non
     timing_html = _timing_meta_html(item)
     signal_badges = _signal_badges_html(item)
     meaning_html = _detail_block_html(details_override, heading=show_summary_heading) if details_override is not None else _meaning_html(item, heading=show_summary_heading)
-    header_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}{status_html}{version_html}</div>'
+    release_meta_html = f'<span style="display:inline-block;font-size:11px;line-height:16px;color:{MUTED};vertical-align:middle;">&nbsp;·&nbsp;{timing_html}</span>' if timing_html else ''
+    header_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}{status_html}{version_html}{release_meta_html}</div>'
 
     rows = [
         f'<tr><td style="padding:14px 16px 0 16px;font-size:13px;line-height:20px;color:{TEXT};">{header_html}</td></tr>'
@@ -273,10 +274,6 @@ def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = Non
     if desc_html:
         rows.append(
             f'<tr><td style="padding:4px 16px 0 16px;font-size:12px;line-height:18px;color:{MUTED};">{desc_html}</td></tr>'
-        )
-    if timing_html:
-        rows.append(
-            f'<tr><td style="padding:6px 16px 0 16px;font-size:11px;line-height:16px;color:{MUTED};">{timing_html}</td></tr>'
         )
     if signal_badges:
         rows.append(
