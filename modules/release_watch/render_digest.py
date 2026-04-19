@@ -168,6 +168,17 @@ def _repo_context_html(item: dict[str, Any]) -> str:
     return ''.join(parts)
 
 
+def _detail_block_html(details: str, *, heading: bool = True) -> str:
+    if not details:
+        return ""
+    title_html = (
+        f'<div style="font-size:11px;line-height:16px;font-weight:bold;letter-spacing:0.04em;text-transform:uppercase;color:{MUTED};margin-top:8px;">AI Summary of updates</div>'
+        if heading
+        else ""
+    )
+    return f'{title_html}<div style="font-size:12px;line-height:18px;color:{TEXT};margin-top:4px;">{_esc(details)}</div>'
+
+
 def _meaning_html(item: dict[str, Any], *, heading: bool = True) -> str:
     status = str(item.get("status") or "unchanged")
     error_text = item.get("error") or ""
@@ -185,15 +196,7 @@ def _meaning_html(item: dict[str, Any], *, heading: bool = True) -> str:
     elif action:
         details = action
 
-    if not details:
-        return ""
-
-    title_html = (
-        f'<div style="font-size:11px;line-height:16px;font-weight:bold;letter-spacing:0.04em;text-transform:uppercase;color:{MUTED};margin-top:8px;">AI Summary of updates</div>'
-        if heading
-        else ""
-    )
-    return f'{title_html}<div style="font-size:12px;line-height:18px;color:{TEXT};margin-top:4px;">{_esc(details)}</div>'
+    return _detail_block_html(details, heading=heading)
 
 
 def _published_label(value: str | None) -> str:
@@ -232,7 +235,7 @@ def _timing_meta_html(item: dict[str, Any]) -> str:
     return f'<div style="font-size:12px;line-height:18px;color:{MUTED};margin-top:6px;">{_esc(" · ".join(parts))}</div>'
 
 
-def _repo_entry_html(item: dict[str, Any]) -> str:
+def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = None, show_summary_heading: bool = True) -> str:
     repo = _esc(item.get("repo"))
     latest = _esc(item.get("latest_tag") or "—")
     link = _esc(item.get("html_url") or "")
@@ -245,7 +248,7 @@ def _repo_entry_html(item: dict[str, Any]) -> str:
     version_html = f'<span style="display:inline-block;margin-left:12px;font-size:13px;line-height:20px;color:{TEXT};vertical-align:middle;">{latest}{semver_html}</span>'
     timing_html = _timing_meta_html(item)
     signal_badges = _signal_badges_html(item)
-    meaning_html = _meaning_html(item, heading=True)
+    meaning_html = _detail_block_html(details_override, heading=show_summary_heading) if details_override is not None else _meaning_html(item, heading=show_summary_heading)
     heading_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}{status_html}{version_html}</div>'
     return f'<div style="padding:12px 14px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{heading_html}{desc_html}{timing_html}{signal_badges}{meaning_html}</div>'
 
@@ -263,52 +266,27 @@ def _render_highlights(results: list[dict[str, Any]]) -> str:
             '</td></tr></table></td></tr>'
         )
 
-    rows = []
+    entries = []
     for item in items:
         status = str(item.get("status") or "unchanged")
-        repo = _esc(item.get("repo"))
-        latest = _esc(item.get("latest_tag") or "—")
-        previous = _esc(item.get("previous_tag") or "—")
-        link = _esc(item.get("html_url") or "")
-        desc = _esc(item.get("description") or "")
-        label, bg, fg = _status_colors(status)
-
+        latest = item.get("latest_tag") or "—"
+        previous = item.get("previous_tag") or "—"
         if status == "updated":
-            summary = f'{previous} → {latest}'
+            details = f'{previous} → {latest}'
         elif status == "first_seen":
-            summary = f'First observed at {latest}'
+            details = f'First observed at {latest}'
         elif status == "error":
-            summary = 'Repository check needs attention'
+            details = 'Repository check needs attention'
         else:
-            summary = latest
-
-        repo_link_html = f'<a href="{link}" style="color:{ACCENT};text-decoration:none;">{repo}</a>' if link else repo
-        link_html = f' &nbsp;·&nbsp; <a href="{link}" style="color:{ACCENT};text-decoration:none;">View release</a>' if link and status != "error" else ''
-        signal_badges = _signal_badges_html(item)
-        meaning_html = _meaning_html(item, heading=False)
-
-        rows.append(
-            '<tr><td style="padding:0 0 10px 0;">'
-            f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
-            '<tr>'
-            f'<td valign="top" style="padding:14px 16px;">'
-            f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_link_html}{_repo_context_html(item)}</div>'
-            f'{f"<div style=\"font-size:{H4}px;color:{MUTED};margin-top:2px;\">{desc}</div>" if desc else ""}'
-            f'<div style="font-size:13px;line-height:20px;color:{TEXT};margin-top:6px;"><strong>{summary}</strong>{link_html}</div>'
-            f'{signal_badges}'
-            f'{meaning_html}'
-            '</td>'
-            f'<td width="110" valign="top" align="right" style="padding:14px 16px;">'
-            f'<span style="display:inline-block;padding:4px 10px;border:1px solid {bg};background:{bg};color:{fg};font-size:12px;line-height:16px;font-weight:bold;">{_esc(label)}</span>'
-            '</td>'
-            '</tr></table></td></tr>'
-        )
+            details = str(latest)
+        entries.append(_repo_entry_html(item, details_override=details, show_summary_heading=False))
 
     return (
         '<tr><td style="padding:0 0 18px 0;">'
         f'<div style="font-size:18px;line-height:24px;font-weight:bold;color:{DARK};margin-bottom:10px;">Highlights</div>'
-        + ''.join(rows)
-        + '</td></tr>'
+        f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;background:{CARD};border:1px solid {BORDER};">'
+        + ''.join(entries)
+        + '</table></td></tr>'
     )
 
 
