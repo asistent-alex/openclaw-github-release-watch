@@ -136,7 +136,7 @@ def _signal_badges_html(item: dict[str, Any]) -> str:
 
     if not badges:
         return ""
-    return f'<div style="margin-top:6px;">{"".join(badges)}</div>'
+    return f'<div style="margin-top:8px;">{"".join(badges)}</div>'
 
 
 def _repo_context_html(item: dict[str, Any]) -> str:
@@ -232,7 +232,7 @@ def _timing_meta_html(item: dict[str, Any]) -> str:
         parts.append(f'Avg: {avg}d')
     if not parts:
         return ""
-    return f'<div style="font-size:12px;line-height:18px;color:{MUTED};margin-top:6px;">{_esc(" · ".join(parts))}</div>'
+    return f'<div style="font-size:11px;line-height:16px;color:{MUTED};margin-top:6px;">{_esc(" · ".join(parts))}</div>'
 
 
 def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = None, show_summary_heading: bool = True) -> str:
@@ -250,7 +250,7 @@ def _repo_entry_html(item: dict[str, Any], *, details_override: str | None = Non
     signal_badges = _signal_badges_html(item)
     meaning_html = _detail_block_html(details_override, heading=show_summary_heading) if details_override is not None else _meaning_html(item, heading=show_summary_heading)
     heading_html = f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{repo_html}{context_html}{status_html}{version_html}</div>'
-    return f'<div style="padding:12px 14px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{heading_html}{desc_html}{timing_html}{signal_badges}{meaning_html}</div>'
+    return f'<div style="padding:14px 16px;border-top:1px solid {BORDER};font-size:13px;line-height:20px;color:{TEXT};">{heading_html}{desc_html}{timing_html}{signal_badges}{meaning_html}</div>'
 
 
 def _render_highlights(results: list[dict[str, Any]]) -> str:
@@ -328,9 +328,9 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
 
             # Category header
             header = (
-                '<tr><td style="padding:16px 0 8px 0;">'
-                f'<div style="font-size:16px;line-height:22px;font-weight:bold;color:{DARK};">{cat_emoji} {cat_name}</div>'
-                f'<div style="font-size:12px;line-height:18px;color:{MUTED};margin-top:2px;">{cat_desc}</div>'
+                '<tr><td style="padding:16px 0 10px 0;">'
+                f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">{cat_emoji} {cat_name}</div>'
+                f'<div style="font-size:12px;line-height:18px;color:{MUTED};margin-top:3px;">{cat_desc}</div>'
                 '</td></tr>'
             )
 
@@ -351,8 +351,8 @@ def _render_categorized_table(results: list[dict[str, Any]], categories: list[di
 
     if uncategorized:
         header = (
-            '<tr><td style="padding:16px 0 8px 0;">'
-            f'<div style="font-size:16px;line-height:22px;font-weight:bold;color:{DARK};">📋 Uncategorized</div>'
+            '<tr><td style="padding:16px 0 10px 0;">'
+            f'<div style="font-size:17px;line-height:24px;font-weight:bold;color:{DARK};">📋 Uncategorized</div>'
             '</td></tr>'
         )
         entries = ''.join(_repo_entry_html(item) for item in uncategorized)
