@@ -397,7 +397,8 @@ class TestGitHubReleaseChecker(unittest.TestCase):
         self.assertIsNone(item["avg_release_interval_days"])
         self.assertIsNone(item["days_since_last_release"])
 
-    def test_prerelease_is_filtered_out_in_stable_only_mode(self):
+    def test_prerelease_appears_as_skipped_in_results(self):
+        """Prerelease repos are visible with status=skipped_prerelease, not hidden."""
         self.write_config(["owner/repo"])
         checker = FakeChecker(
             responses={
@@ -419,7 +420,67 @@ class TestGitHubReleaseChecker(unittest.TestCase):
         )
         result = checker.check_repos()
         self.assertEqual(result["count"], 1)
-        self.assertEqual(result["results"], [])
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["status"], "skipped_prerelease")
+        self.assertEqual(result["results"][0]["repo"], "owner/repo")
+        self.assertEqual(result["results"][0]["latest_tag"], "v2.0.0-rc1")
+        self.assertEqual(result["updates"], 0)
+
+    def test_prerelease_repo_state_is_updated(self):
+        """State for prerelease repo is saved with last_checked, not stale."""
+        self.write_config(["owner/repo"])
+        checker = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v2.0.0-rc1",
+                    "name": "v2.0.0-rc1",
+                    "published_at": "2026-04-11T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v2.0.0-rc1",
+                    "body": "Release candidate",
+                    "prerelease": True,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        checker.check_repos()
+        with open(self.state_path) as f:
+            state = json.load(f)
+        repo_state = state["repos"]["owner/repo"]
+        self.assertEqual(repo_state["status"], "skipped_prerelease")
+        self.assertEqual(repo_state["latest_tag"], "v2.0.0-rc1")
+        self.assertIsNotNone(repo_state["last_checked"])
+
+    def test_draft_appears_as_skipped_in_results(self):
+        """Draft repos are visible with status=skipped_draft, not hidden."""
+        self.write_config(["owner/repo"])
+        checker = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v3.0.0-draft",
+                    "name": "v3.0.0-draft",
+                    "published_at": "2026-04-11T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v3.0.0-draft",
+                    "body": "Work in progress",
+                    "prerelease": False,
+                    "draft": True,
+                    "rate_limit": {},
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        result = checker.check_repos()
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertEqual(result["results"][0]["status"], "skipped_draft")
+        self.assertEqual(result["results"][0]["latest_tag"], "v3.0.0-draft")
         self.assertEqual(result["updates"], 0)
 
     def test_semver_change_is_classified(self):
@@ -858,6 +919,87 @@ class TestGitHubReleaseChecker(unittest.TestCase):
         self.assertEqual(result["viewer_starred"], [])
         self.assertEqual(result["viewer_starred_summary"]["tracked_count"], 1)
         self.assertEqual(result["viewer_starred_summary"]["untracked_count"], 0)
+
+    def test_state_file_is_valid_json_after_write(self):
+        """State file is valid JSON and not truncated (atomic write)."""
+        self.write_config(["owner/repo"])
+        checker = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v1.0.0",
+                    "name": "v1.0.0",
+                    "published_at": "2026-04-09T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v1.0.0",
+                    "body": "Stable",
+                    "prerelease": False,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        checker.check_repos()
+        # Read back and verify valid JSON
+        with open(self.state_path) as f:
+            state = json.load(f)
+        self.assertIn("owner/repo", state["repos"])
+        # No temp file left behind
+        self.assertFalse(Path(str(self.state_path) + ".tmp").exists())
+
+    def test_prerelease_then_stable_preserves_previous_tag(self):
+        """After a prerelease, the next stable release should show previous_tag."""
+        self.write_config(["owner/repo"])
+        # Run 1: prerelease
+        checker1 = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v2.0.0-rc1",
+                    "name": "v2.0.0-rc1",
+                    "published_at": "2026-04-10T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v2.0.0-rc1",
+                    "body": "RC",
+                    "prerelease": True,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        checker1.check_repos()
+
+        # Run 2: stable release — previous state should exist
+        checker2 = FakeChecker(
+            responses={
+                "owner/repo": {
+                    "ok": True,
+                    "tag_name": "v2.0.0",
+                    "name": "v2.0.0",
+                    "published_at": "2026-04-11T00:00:00Z",
+                    "html_url": "https://github.com/owner/repo/releases/tag/v2.0.0",
+                    "body": "Stable release",
+                    "prerelease": False,
+                    "draft": False,
+                    "rate_limit": {},
+                }
+            },
+            config_path=self.config_path,
+            state_path=self.state_path,
+            token="test",
+        )
+        result = checker2.check_repos()
+        # The key bug fix: state from run 1 is preserved, so run 2 sees "updated" not "first_seen"
+        self.assertEqual(result["updates"], 1)
+        self.assertEqual(result["results"][0]["status"], "updated")
+        with open(self.state_path) as f:
+            state = json.load(f)
+        repo_state = state["repos"]["owner/repo"]
+        self.assertEqual(repo_state.get("previous_tag"), "v2.0.0-rc1")
 
 
 if __name__ == "__main__":

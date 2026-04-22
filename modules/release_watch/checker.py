@@ -195,8 +195,22 @@ class GitHubReleaseChecker:
             }
 
     def _save_state(self, state: Dict[str, Any]) -> None:
-        with open(self.state_path, "w", encoding="utf-8") as handle:
-            json.dump(state, handle, indent=2)
+        """Write state atomically to avoid corruption from concurrent writes."""
+        temp_path = Path(str(self.state_path) + ".tmp")
+        try:
+            with open(temp_path, "w", encoding="utf-8") as handle:
+                json.dump(state, handle, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())
+            # Atomic rename on POSIX; best-effort on Windows
+            os.replace(temp_path, self.state_path)
+        except Exception:
+            # Clean up temp on failure
+            try:
+                temp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            raise
 
     def _attach_cache(self, state: Dict[str, Any]) -> None:
         cache = state.setdefault("api_cache", {})
@@ -247,6 +261,38 @@ class GitHubReleaseChecker:
             "viewer_starred": [],
             "message": NO_CONFIG_MESSAGE,
         }
+
+    def _build_skipped_result(
+        self,
+        repo: str,
+        previous: Dict[str, Any],
+        release: Dict[str, Any],
+        timestamp: str,
+        reason: str,
+    ) -> tuple[Dict[str, Any], Dict[str, Any]]:
+        """Record a skipped release (prerelease/draft) so the repo stays visible."""
+        repo_state = {
+            **previous,
+            "last_checked": timestamp,
+            "status": reason,
+            "latest_tag": release.get("tag_name"),
+            "published_at": release.get("published_at"),
+            "html_url": release.get("html_url"),
+            "name": release.get("name"),
+            "prerelease": release.get("prerelease", False),
+            "draft": release.get("draft", False),
+            "release_notes_excerpt": None,
+            "semver_change": None,
+            "error": None,
+        }
+        result = {
+            "repo": repo,
+            "status": reason,
+            "latest_tag": release.get("tag_name"),
+            "html_url": release.get("html_url"),
+            "rate_limit": release.get("rate_limit", {}),
+        }
+        return repo_state, result
 
     def get_latest_release(self, repo: str) -> Dict[str, Any]:
         """Fetch latest published release for a repository."""
@@ -1045,6 +1091,10 @@ class GitHubReleaseChecker:
                     lines.append(f"⚠️ {repo}: {item.get('error')}{suffix}")
                 elif status == "first_seen":
                     lines.append(f"👀 {repo}: first seen at {item.get('latest_tag')}{suffix}")
+                elif status == "skipped_prerelease":
+                    lines.append(f"⏭️ {repo}: {item.get('latest_tag')} (pre-release){suffix}")
+                elif status == "skipped_draft":
+                    lines.append(f"⏭️ {repo}: {item.get('latest_tag')} (draft){suffix}")
                 else:
                     lines.append(f"✅ {repo}: {item.get('latest_tag')}{suffix}")
         else:
@@ -1099,6 +1149,15 @@ class GitHubReleaseChecker:
                 continue
 
             if not self._is_supported_release(release):
+                repo_state, result = self._build_skipped_result(
+                    repo=repo,
+                    previous=previous,
+                    release=release,
+                    timestamp=timestamp,
+                    reason="skipped_prerelease" if release.get("prerelease") else "skipped_draft",
+                )
+                state["repos"][repo] = repo_state
+                results.append(result)
                 continue
 
             status = self._determine_status(previous, release.get("tag_name"))
