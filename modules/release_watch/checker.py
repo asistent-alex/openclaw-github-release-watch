@@ -19,7 +19,7 @@ from .config import (
 
 try:  # Prefer IMM-Romania / Exchange logger when available.
     from exchange.logger import get_logger as _get_exchange_logger
-except Exception:  # pragma: no cover - dependency may be absent in isolation
+except ImportError:  # pragma: no cover - dependency may be absent in isolation
     _get_exchange_logger = None
 
 
