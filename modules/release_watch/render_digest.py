@@ -54,6 +54,10 @@ def _status_colors(status: str) -> tuple[str, str, str]:
         return ("First seen", INFO_BG, INFO_TEXT)
     if status == "error":
         return ("Error", ERROR_BG, ERROR_TEXT)
+    if status == "skipped_prerelease":
+        return ("Pre-release", "#fef3c7", "#92400e")
+    if status == "skipped_draft":
+        return ("Draft", "#e5e7eb", "#4b5563")
     return ("Unchanged", TABLE_ROW, MUTED)
 
 
@@ -214,6 +218,12 @@ def _meaning_text(item: dict[str, Any]) -> str:
             error_text
             or "GitHub metadata was unavailable for this repository in this cycle."
         )
+    if status == "skipped_prerelease":
+        latest = item.get("latest_tag") or "latest release"
+        return f"Latest release {latest} is a pre-release — waiting for stable."
+    if status == "skipped_draft":
+        latest = item.get("latest_tag") or "latest release"
+        return f"Latest release {latest} is a draft — waiting for published."
     if excerpt:
         return excerpt
     if status == "first_seen":

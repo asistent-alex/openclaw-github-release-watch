@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "mode": "review",
+  "repo": "/home/adminul/.openclaw/skills/github-release-watch",
+  "branch": "main",
+  "phase": {
+    "shared": "context-scan",
+    "mode": "report",
+    "step": "writing-report"
+  },
+  "task": "Full repo code review — all categories",
+  "status": "active",
+  "approvals": {},
+  "clarify": {
+    "questionsAsked": ["Depth?", "Scope preset?"],
+    "answers": ["Full analysis, all categories", "Full repo"],
+    "assumptions": ["No specific area emphasized — cover security, architecture, code quality, testing, process"],
+    "openQuestions": []
+  },
+  "plan": {
+    "summary": "Full repo review of all 15 files across security, architecture, code quality, and testing",
+    "tasks": [],
+    "risk": "low",
+    "confidence": "high",
+    "blastRadius": "narrow",
+    "rollback": "easy"
+  },
+  "files": {
+    "touched": [],
+    "planned": []
+  },
+  "tests": {
+    "baseline": "23 checker + 4 template tests — all pass",
+    "latest": "23 checker + 4 template tests — all pass",
+    "coverage": "no coverage tool installed"
+  },
+  "verify": {
+    "summary": "",
+    "readyForPr": false
+  },
+  "nextAction": "Write review report to .openclaw/reviews/review-2026-04-22.md",
+  "updatedAt": "2026-04-22T16:35:00Z"
+}
