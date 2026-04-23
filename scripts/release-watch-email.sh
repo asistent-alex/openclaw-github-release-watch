@@ -8,8 +8,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 WATCH_CLI="$PROJECT_DIR/scripts/release-watch.py"
-IMM_ROMANIA_PATH="${IMM_ROMANIA_PATH:-$HOME/.openclaw/skills/imm-romania}"
-IMM_CLI="$IMM_ROMANIA_PATH/scripts/imm-romania.py"
+IMM_ROMANIA_PATH="${IMM_ROMANIA_PATH:-$HOME/.openclaw/skills/nexlink}"
+IMM_CLI="$IMM_ROMANIA_PATH/scripts/nexlink.py"
 CONFIG_PATH="${GITHUB_RELEASE_WATCH_CONFIG_PATH:-$PROJECT_DIR/data/github-release-watch-repos.json}"
 STATE_PATH="${GITHUB_RELEASE_WATCH_STATE_PATH:-$PROJECT_DIR/data/github-release-watch-state.json}"
 
