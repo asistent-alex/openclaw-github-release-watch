@@ -49,11 +49,13 @@ def main() -> None:
     repos_cmd.add_argument("--config", help="Optional config path")
     repos_cmd.add_argument("--state", help="Optional state path")
     repos_cmd.add_argument("--repo", action="append", help="Override repo (repeatable)")
+    repos_cmd.add_argument("--dry-run", action="store_true", help="Show what would be done without saving state")
 
     check_cmd = subparsers.add_parser("check", help="Run release check")
     check_cmd.add_argument("--config", help="Optional config path")
     check_cmd.add_argument("--state", help="Optional state path")
     check_cmd.add_argument("--repo", action="append", help="Override repo (repeatable)")
+    check_cmd.add_argument("--dry-run", action="store_true", help="Show what would be done without saving state")
 
     status_cmd = subparsers.add_parser("status", help="Show saved checker status")
     status_cmd.add_argument("--config", help="Optional config path")
@@ -65,6 +67,7 @@ def main() -> None:
     digest_cmd.add_argument("--state", help="Optional state path")
     digest_cmd.add_argument("--repo", action="append", help="Override repo (repeatable)")
     digest_cmd.add_argument("--check", action="store_true", help="Refresh before generating digest")
+    digest_cmd.add_argument("--dry-run", action="store_true", help="Show what would be done without saving state")
 
     args = parser.parse_args()
     if not args.command:
@@ -75,6 +78,7 @@ def main() -> None:
         config_path=args.config if hasattr(args, "config") else None,
         state_path=args.state if hasattr(args, "state") else None,
         repo_overrides=args.repo if hasattr(args, "repo") else None,
+        dry_run=args.dry_run if hasattr(args, "dry_run") else False,
     )
 
     if args.command == "repos":

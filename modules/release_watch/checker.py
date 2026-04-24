@@ -92,7 +92,9 @@ class GitHubReleaseChecker:
         state_path: Optional[Path] = None,
         token: Optional[str] = None,
         repo_overrides: Optional[List[str]] = None,
+        dry_run: bool = False,
     ):
+        self.dry_run = dry_run
         self.config = load_github_config(
             config_path=config_path,
             repo_overrides=repo_overrides,
@@ -1125,6 +1127,8 @@ class GitHubReleaseChecker:
             return self._build_empty_check_result(timestamp)
 
         state = self._load_state()
+        if self.dry_run:
+            state = json.loads(json.dumps(state))  # deep copy to avoid mutating original
         self._attach_cache(state)
         results: List[Dict[str, Any]] = []
         updates = 0
@@ -1196,9 +1200,11 @@ class GitHubReleaseChecker:
         latest_rate_limit = viewer_starred_snapshot.get("rate_limit", latest_rate_limit)
 
         state["last_run"] = timestamp
-        self._save_state(state)
+        if not self.dry_run:
+            self._save_state(state)
 
         return {
+            "dry_run": self.dry_run,
             "ok": True,
             "enabled": True,
             "timestamp": timestamp,
