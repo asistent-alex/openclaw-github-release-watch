@@ -29,6 +29,7 @@ if imm_root.exists() and str(imm_root) not in sys.path:
     sys.path.append(str(imm_root))
 
 from release_watch.checker import GitHubReleaseChecker
+from release_watch import __version__
 
 
 def main() -> None:
@@ -36,11 +37,19 @@ def main() -> None:
         description="GitHub Release Watch",
         epilog=(
             "Examples:\n"
+            "  python3 scripts/release-watch.py --version\n"
             "  python3 scripts/release-watch.py repos\n"
             "  python3 scripts/release-watch.py check --config data/github-release-watch-repos.example.json\n"
             "  python3 scripts/release-watch.py digest --check --config data/github-release-watch-repos.example.json"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="Show version and exit",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Command")
