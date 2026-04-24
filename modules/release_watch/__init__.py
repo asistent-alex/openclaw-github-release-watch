@@ -24,7 +24,7 @@ def _bootstrap_imm_romania_dependency() -> None:
 
 _bootstrap_imm_romania_dependency()
 
-__version__ = "3.3.2"
+__version__ = "3.4.0"
 
 from .checker import GitHubReleaseChecker
 
