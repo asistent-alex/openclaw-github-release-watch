@@ -289,7 +289,6 @@ def _timing_meta_html(item: dict[str, Any]) -> str:
 def _repo_entry_html(
     item: dict[str, Any],
     *,
-    details_override: str | None = None,
     show_summary_heading: bool = True,
 ) -> str:
     repo = _esc(item.get("repo"))
@@ -315,9 +314,7 @@ def _repo_entry_html(
         [_status_badge_html(item), *_signal_badges(item)],
         margin_top=0,
     )
-    meaning_text = (
-        details_override if details_override is not None else _meaning_text(item)
-    )
+    meaning_text = _meaning_text(item)
     summary_header_html = (
         _summary_header_html() if show_summary_heading and meaning_text else ""
     )
@@ -372,18 +369,7 @@ def _render_highlights(results: list[dict[str, Any]]) -> str:
 
     entries = []
     for item in items:
-        status = str(item.get("status") or "unchanged")
-        latest = item.get("latest_tag") or "—"
-        previous = item.get("previous_tag") or "—"
-        if status == "updated":
-            details = f"{previous} → {latest}"
-        elif status == "first_seen":
-            details = f"First observed at {latest}"
-        elif status == "error":
-            details = "Repository check needs attention"
-        else:
-            details = str(latest)
-        entries.append(_repo_entry_html(item, details_override=details))
+        entries.append(_repo_entry_html(item))
 
     return (
         '<tr><td style="padding:0 0 18px 0;">'

@@ -172,8 +172,8 @@ def test_render_highlights_keep_summary_heading_and_prominent_status_badges():
     assert updated_badge_index < updated_repo_index
     assert first_seen_badge_index < first_seen_repo_index
     assert out.count("Latest release summary") >= 4
-    assert "v0.9.0 → v1.0.0" in out
-    assert "First observed at v1.0.0" in out
+    assert "Added smarter sync • Fixed rendering" in out
+    assert "Newly added to tracking at v1.0.0." in out
 
 
 def test_render_ecosystem_cards_use_same_summary_structure():
