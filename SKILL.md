@@ -19,10 +19,16 @@ This skill depends on **`imm-romania`** for Exchange-backed email delivery.
 ## Main entrypoints
 
 - `python3 scripts/release-watch.py repos ...`
-- `python3 scripts/release-watch.py check ...`
+- `python3 scripts/release-watch.py check [--dry-run] ...`
 - `python3 scripts/release-watch.py status ...`
-- `python3 scripts/release-watch.py digest ...`
-- `bash scripts/release-watch-email.sh`
+- `python3 scripts/release-watch.py digest [--check] [--dry-run] ...`
+- `bash scripts/release-watch-email.sh` (*always runs `--dry-run` — state is never written by email previews*)
+
+## Dry-run mode
+
+`--dry-run` runs a full release check or digest generation but **never saves state**.
+Use it for previews, testing, or email scripts. The output JSON includes `"dry_run": true`.
+Normal mode (no flag) still writes state as expected.
 
 ## References
 

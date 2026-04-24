@@ -55,7 +55,7 @@ if [[ -z "$RECIPIENT" ]]; then
   exit 0
 fi
 
-DIGEST_JSON=$(python3 "$WATCH_CLI" digest --check "${CONFIG_ARGS[@]}" "${REPO_ARGS[@]}")
+DIGEST_JSON=$(python3 "$WATCH_CLI" digest --check --dry-run "${CONFIG_ARGS[@]}" "${REPO_ARGS[@]}")
 SUBJECT=$(printf '%s' "$DIGEST_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["subject"])')
 BODY=$(printf '%s' "$DIGEST_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["body"])')
 HTML=$(printf '%s' "$DIGEST_JSON" | python3 "$PROJECT_DIR/modules/release_watch/render_digest.py")
