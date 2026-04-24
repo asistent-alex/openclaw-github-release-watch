@@ -18,6 +18,14 @@
       ]
     }
   ],
+  "interesting_repos": [
+    {
+      "repo": "example-org/example-repo",
+      "label": "Example Repo",
+      "kind": "ecosystem",
+      "reason": "Worth tracking, but kept outside the release digest until it adopts GitHub releases."
+    }
+  ],
   "repos": [
     "openclaw/openclaw",
     "Martian-Engineering/lossless-claw"

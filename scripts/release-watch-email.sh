@@ -18,16 +18,9 @@ if [[ ! -f "$IMM_CLI" ]]; then
   exit 1
 fi
 
-REPO_ARGS=()
 CONFIG_ARGS=(--state "$STATE_PATH")
 
-if [[ -n "${GITHUB_RELEASE_WATCH_REPOS:-}" ]]; then
-  IFS=',' read -r -a REPOS <<< "$GITHUB_RELEASE_WATCH_REPOS"
-  for repo in "${REPOS[@]}"; do
-    repo="$(printf '%s' "$repo" | xargs)"
-    [[ -n "$repo" ]] && REPO_ARGS+=(--repo "$repo")
-  done
-elif [[ -f "$CONFIG_PATH" ]]; then
+if [[ -f "$CONFIG_PATH" ]]; then
   CONFIG_ARGS+=(--config "$CONFIG_PATH")
 else
   echo "No GitHub Release Watch config found; exiting cleanly."
@@ -55,7 +48,7 @@ if [[ -z "$RECIPIENT" ]]; then
   exit 0
 fi
 
-DIGEST_JSON=$(python3 "$WATCH_CLI" digest --check --dry-run "${CONFIG_ARGS[@]}" "${REPO_ARGS[@]}")
+DIGEST_JSON=$(python3 "$WATCH_CLI" digest --check --dry-run "${CONFIG_ARGS[@]}")
 SUBJECT=$(printf '%s' "$DIGEST_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["subject"])')
 BODY=$(printf '%s' "$DIGEST_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["body"])')
 HTML=$(printf '%s' "$DIGEST_JSON" | python3 "$PROJECT_DIR/modules/release_watch/render_digest.py")

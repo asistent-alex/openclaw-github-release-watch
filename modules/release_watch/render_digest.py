@@ -79,13 +79,6 @@ def _semver_badge(change: Any) -> str:
     )
 
 
-def _notes_excerpt_html(item: dict[str, Any]) -> str:
-    excerpt = item.get("release_notes_excerpt") or ""
-    if not excerpt:
-        return ""
-    return f'<div style="font-size:12px;line-height:18px;color:{TEXT};margin-top:6px;">{_esc(excerpt)}</div>'
-
-
 def _attention_palette(level: Any) -> tuple[str, str]:
     palette = {
         "high": ("#fee2e2", "#991b1b"),
@@ -232,12 +225,6 @@ def _meaning_text(item: dict[str, Any]) -> str:
     if action:
         return action
     return ""
-
-
-def _published_label(value: str | None) -> str:
-    if not value:
-        return "—"
-    return _esc(value.replace("T", " ").replace("Z", " UTC"))
 
 
 def _summary_card(label: str, value: Any, bg: str, fg: str) -> str:
@@ -500,7 +487,12 @@ def _ecosystem_card_html(item: dict[str, Any]) -> str:
     if forks is not None:
         meta_bits.append(f"Forks: {_human_count(forks)}")
     if updated_at:
-        meta_bits.append(f"Updated: {_published_label(updated_at)}")
+        label = (
+            _esc(updated_at.replace("T", " ").replace("Z", " UTC"))
+            if updated_at
+            else "—"
+        )
+        meta_bits.append(f"Updated: {label}")
     meta_html = " · ".join(meta_bits)
     rows = [
         f'<tr><td style="padding:14px 16px 0 16px;font-size:11px;line-height:16px;color:{TEXT};">{_badge_row_html([_badge("No releases yet", "#f3f4f6", "#374151", border="#e5e7eb")], margin_top=0)}</td></tr>',
