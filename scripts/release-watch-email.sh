@@ -18,8 +18,22 @@ if [[ ! -f "$IMM_CLI" ]]; then
   exit 1
 fi
 
+DRY_RUN="${GITHUB_RELEASE_WATCH_DRY_RUN:-}"
+DRY_RUN_FLAG=""
+if [[ "$DRY_RUN" == "true" || "$DRY_RUN" == "1" ]]; then
+  DRY_RUN_FLAG="--dry-run"
+fi
+
+if [[ -n "$DRY_RUN_FLAG" ]]; then
+  echo "[DRY-RUN] Preview mode — no email will be sent."
+fi
+
 REPO_ARGS=()
 CONFIG_ARGS=(--state "$STATE_PATH")
+
+if [[ -n "$DRY_RUN_FLAG" ]]; then
+  CONFIG_ARGS+=("$DRY_RUN_FLAG")
+fi
 
 if [[ -n "${GITHUB_RELEASE_WATCH_REPOS:-}" ]]; then
   IFS=',' read -r -a REPOS <<< "$GITHUB_RELEASE_WATCH_REPOS"
@@ -63,6 +77,17 @@ ENABLED=$(printf '%s' "$DIGEST_JSON" | python3 -c 'import json,sys; data=json.lo
 SUMMARY=$(printf '%s' "$DIGEST_JSON" | python3 -c 'import json,sys; data=json.load(sys.stdin); updates=int(data.get("updates") or 0); failures=int(data.get("failures") or 0); interesting=len(data.get("interesting_repos") or []); print((f"GitHub release digest email sent successfully with {updates} update" + ("s" if updates != 1 else "") + (f" and {interesting} ecosystem repo" + ("s" if interesting != 1 else "") if interesting else "") + (f"; {failures} repo checks need review." if failures else ".")) if data.get("results") or data.get("interesting_repos") else "GitHub Release Watch not enabled; exiting cleanly.")')
 
 if [[ "$ENABLED" != "yes" ]]; then
+  echo "$SUMMARY"
+  exit 0
+fi
+
+if [[ -n "$DRY_RUN_FLAG" ]]; then
+  echo "[DRY-RUN] Would send email to: $RECIPIENT"
+  echo "[DRY-RUN] Subject: $SUBJECT"
+  echo "[DRY-RUN] Body length: ${#BODY} chars"
+  if [[ -n "$HTML" && "$HTML" != "<p>Invalid digest</p>" ]]; then
+    echo "[DRY-RUN] HTML length: ${#HTML} chars"
+  fi
   echo "$SUMMARY"
   exit 0
 fi

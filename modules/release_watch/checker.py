@@ -92,6 +92,7 @@ class GitHubReleaseChecker:
         state_path: Optional[Path] = None,
         token: Optional[str] = None,
         repo_overrides: Optional[List[str]] = None,
+        dry_run: bool = False,
     ):
         self.config = load_github_config(
             config_path=config_path,
@@ -102,6 +103,7 @@ class GitHubReleaseChecker:
         )
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.token = token if token is not None else self._load_token()
+        self.dry_run = dry_run
         self._api_cache: Dict[str, Dict[str, Any]] = {}
         self._cache_dirty = False
 
@@ -196,6 +198,9 @@ class GitHubReleaseChecker:
 
     def _save_state(self, state: Dict[str, Any]) -> None:
         """Write state atomically to avoid corruption from concurrent writes."""
+        if self.dry_run:
+            _logger.info("[DRY-RUN] Skipping state write to %s", self.state_path)
+            return
         temp_path = Path(str(self.state_path) + ".tmp")
         try:
             with open(temp_path, "w", encoding="utf-8") as handle:
