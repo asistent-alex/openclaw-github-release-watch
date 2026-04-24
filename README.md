@@ -89,10 +89,29 @@ bash scripts/release-watch-email.sh
 |---|---|
 | Inspect configured repos | `python3 scripts/release-watch.py repos --config data/github-release-watch-repos.json` |
 | Run a release check | `python3 scripts/release-watch.py check --config data/github-release-watch-repos.json` |
+| Run a release check (preview only, no state write) | `python3 scripts/release-watch.py check --dry-run --config data/github-release-watch-repos.json` |
 | Generate a digest | `python3 scripts/release-watch.py digest --check --config data/github-release-watch-repos.json` |
+| Generate a digest (preview only, no state write) | `python3 scripts/release-watch.py digest --check --dry-run --config data/github-release-watch-repos.json` |
 | Generate from saved state | `python3 scripts/release-watch.py digest --config data/github-release-watch-repos.json` |
-| Send email digest | `bash scripts/release-watch-email.sh` |
-| Override repos on the fly | `python3 scripts/release-watch.py check --repos openclaw/openclaw Martians/lossless-claw` |
+| Send email digest | `bash scripts/release-watch-email.sh` (*always uses `--dry-run` under the hood*) |
+| Override repos on the fly | `python3 scripts/release-watch.py check --repo openclaw/openclaw --repo Martian-Engineering/lossless-claw` |
+
+### Dry-run previews (state-safe)
+
+`--dry-run` runs the full check and digest generation but **never touches the state file**.
+The output JSON includes `"dry_run": true` so downstream tools know it was a preview.
+
+```bash
+# Preview a release check
+python3 scripts/release-watch.py check --dry-run --config data/github-release-watch-repos.json
+
+# Preview a digest
+python3 scripts/release-watch.py digest --check --dry-run --config data/github-release-watch-repos.json
+```
+
+The email wrapper (`release-watch-email.sh`) always passes `--dry-run` to `digest --check`,
+so cron email previews never persist state. On each real cron cycle, the saved state is
+updated once by the main check run, and all email sends are safe previews of that state.
 
 ### Combined workflows
 
@@ -229,7 +248,7 @@ python3 tests/test_github_template.py
 bash -n scripts/release-watch-email.sh
 ```
 
-Covers: checker state transitions, update detection, repo overrides, viewer-starred fetch/state/render, digest generation, categorized rendering, ecosystem watch, HTML template stability.
+Covers: checker state transitions, update detection, repo overrides, viewer-starred fetch/state/render, digest generation, categorized rendering, ecosystem watch, HTML template stability, **dry-run state preservation (10 tests)**.
 
 ## For agents and contributors
 
