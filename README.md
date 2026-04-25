@@ -87,6 +87,7 @@ bash scripts/release-watch-email.sh
 | What you can do | Command |
 |---|---|
 | Inspect configured repos | `python3 scripts/release-watch.py repos --config data/github-release-watch-repos.json` |
+| Run a release check with asset info | `python3 scripts/release-watch.py check --assets --config data/github-release-watch-repos.json` |
 | Run a release check | `python3 scripts/release-watch.py check --config data/github-release-watch-repos.json` |
 | Run a release check (preview only, no state write) | `python3 scripts/release-watch.py check --dry-run --config data/github-release-watch-repos.json` |
 | Generate a digest | `python3 scripts/release-watch.py digest --check --config data/github-release-watch-repos.json` |

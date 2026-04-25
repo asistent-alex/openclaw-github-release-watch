@@ -273,6 +273,52 @@ def _timing_meta_html(item: dict[str, Any]) -> str:
     return _esc(" · ".join(parts))
 
 
+def _assets_html(item: dict[str, Any]) -> str:
+    assets = item.get("assets")
+    if not isinstance(assets, list) or not assets:
+        return ""
+    parts = []
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        name = str(asset.get("name") or "")
+        url = str(asset.get("browser_download_url") or "")
+        size = asset.get("size")
+        size_text = ""
+        if isinstance(size, int):
+            if size < 1024:
+                size_text = f" {size}B"
+            elif size < 1024 * 1024:
+                size_text = f" {size / 1024:.1f}KB".replace(".0KB", "KB")
+            elif size < 1024 * 1024 * 1024:
+                size_text = f" {size / (1024 * 1024):.1f}MB".replace(".0MB", "MB")
+            else:
+                size_text = f" {size / (1024 * 1024 * 1024):.1f}GB".replace(".0GB", "GB")
+        if url:
+            parts.append(
+                f'<li style="margin:2px 0;">'
+                f'<a href="{_esc(url)}" style="color:{ACCENT};text-decoration:none;font-size:12px;line-height:18px;">{_esc(name)}</a>'
+                f'<span style="color:{MUTED};font-size:11px;line-height:16px;">{size_text}</span>'
+                f'</li>'
+            )
+        else:
+            parts.append(
+                f'<li style="margin:2px 0;"><span style="color:{TEXT};font-size:12px;line-height:18px;">{_esc(name)}</span>'
+                f'<span style="color:{MUTED};font-size:11px;line-height:16px;">{size_text}</span></li>'
+            )
+    if not parts:
+        return ""
+    count = len(assets)
+    header = f"Assets ({count})" if count > 1 else "Asset"
+    return (
+        f'<div style="margin-top:8px;">'
+        f'<div style="font-size:11px;line-height:16px;color:{MUTED};text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">{_esc(header)}</div>'
+        f'<ul style="margin:0;padding:0 0 0 16px;list-style-type:disc;">'
+        + "".join(parts)
+        + f'</ul></div>'
+    )
+
+
 def _repo_entry_html(
     item: dict[str, Any],
     *,
@@ -341,6 +387,12 @@ def _repo_entry_html(
         )
     else:
         rows.append('<tr><td style="padding:0 0 14px 0;"></td></tr>')
+
+    assets_html = _assets_html(item)
+    if assets_html:
+        rows.append(
+            f'<tr><td style="padding:0 16px 14px 16px;font-size:12px;line-height:18px;color:{TEXT};">{assets_html}</td></tr>'
+        )
 
     return _card_table_html(rows)
 

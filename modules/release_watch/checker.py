@@ -93,8 +93,10 @@ class GitHubReleaseChecker:
         token: Optional[str] = None,
         repo_overrides: Optional[List[str]] = None,
         dry_run: bool = False,
+        assets: bool = False,
     ):
         self.dry_run = dry_run
+        self.assets = assets
         self.config = load_github_config(
             config_path=config_path,
             repo_overrides=repo_overrides,
@@ -286,6 +288,8 @@ class GitHubReleaseChecker:
             "release_notes_excerpt": None,
             "semver_change": None,
             "error": None,
+            "assets": release.get("assets") if self.assets else previous.get("assets"),
+            "assets_changed": False,
         }
         result = {
             "repo": repo,
@@ -311,6 +315,20 @@ class GitHubReleaseChecker:
             }
 
         data = result["data"]
+        assets = data.get("assets")
+        normalized_assets = []
+        if isinstance(assets, list):
+            for asset in assets:
+                if not isinstance(asset, dict):
+                    continue
+                normalized_assets.append(
+                    {
+                        "name": str(asset.get("name") or ""),
+                        "size": asset.get("size"),
+                        "download_count": asset.get("download_count"),
+                        "browser_download_url": str(asset.get("browser_download_url") or ""),
+                    }
+                )
         return {
             "ok": True,
             "repo": repo,
@@ -321,6 +339,7 @@ class GitHubReleaseChecker:
             "body": data.get("body") or "",
             "prerelease": bool(data.get("prerelease", False)),
             "draft": bool(data.get("draft", False)),
+            "assets": normalized_assets,
             "rate_limit": result.get("rate_limit", {}),
         }
 
@@ -613,6 +632,9 @@ class GitHubReleaseChecker:
         previous_tag_for_state = (
             previous_tag if status == "updated" else previous.get("previous_tag")
         )
+        previous_assets = previous.get("assets") if isinstance(previous.get("assets"), list) else []
+        current_assets = release.get("assets") if isinstance(release.get("assets"), list) else []
+        assets_changed = self.assets and self._assets_changed(previous_assets, current_assets)
         return {
             "latest_tag": latest_tag,
             "previous_tag": previous_tag_for_state,
@@ -626,7 +648,24 @@ class GitHubReleaseChecker:
             "last_checked": timestamp,
             "status": status,
             "error": None,
+            "assets": current_assets if self.assets else previous_assets,
+            "assets_changed": assets_changed,
         }
+
+    def _assets_changed(self, previous: List[Dict[str, Any]], current: List[Dict[str, Any]]) -> bool:
+        """Compare asset lists by name and size to detect changes."""
+        if len(previous) != len(current):
+            return True
+        prev_by_name = {a.get("name"): a.get("size") for a in previous if isinstance(a, dict)}
+        for asset in current:
+            if not isinstance(asset, dict):
+                return True
+            name = asset.get("name")
+            if name not in prev_by_name:
+                return True
+            if prev_by_name[name] != asset.get("size"):
+                return True
+        return False
 
     def _safe_repo_context(self, repo: str, previous: Dict[str, Any]) -> Dict[str, Any]:
         context = {
@@ -889,7 +928,11 @@ class GitHubReleaseChecker:
         repo_state: Dict[str, Any],
         rate_limit: Dict[str, Any],
     ) -> Dict[str, Any]:
-        return {"repo": repo, "status": status, **repo_state, "rate_limit": rate_limit}
+        result = {"repo": repo, "status": status, **repo_state, "rate_limit": rate_limit}
+        if not self.assets:
+            result.pop("assets", None)
+            result.pop("assets_changed", None)
+        return result
 
     def _interesting_repo_items(self, exclude_repos: Optional[set[str]] = None) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
@@ -1066,6 +1109,36 @@ class GitHubReleaseChecker:
             "last_run": state.get("last_run"),
         }
 
+    def _assets_digest_text(self, item: Dict[str, Any]) -> str:
+        assets = item.get("assets")
+        if not isinstance(assets, list) or not assets:
+            return ""
+        count = len(assets)
+        parts = []
+        for asset in assets:
+            if not isinstance(asset, dict):
+                continue
+            name = str(asset.get("name") or "")
+            size = asset.get("size")
+            if size is not None:
+                parts.append(f"{name} ({self._human_size(size)})")
+            else:
+                parts.append(name)
+        if not parts:
+            return ""
+        if count <= 3:
+            return f"assets: {', '.join(parts)}"
+        return f"assets: {count} files ({', '.join(parts[:3])}{'…' if count > 3 else ''})"
+
+    def _human_size(self, size: int) -> str:
+        if size < 1024:
+            return f"{size}B"
+        if size < 1024 * 1024:
+            return f"{size / 1024:.1f}KB".replace(".0KB", "KB")
+        if size < 1024 * 1024 * 1024:
+            return f"{size / (1024 * 1024):.1f}MB".replace(".0MB", "MB")
+        return f"{size / (1024 * 1024 * 1024):.1f}GB".replace(".0GB", "GB")
+
     def _build_digest_lines(self, snapshot: Dict[str, Any]) -> List[str]:
         lines = ["GitHub Releases Monitor", "======================", ""]
         results = snapshot.get("results", [])
@@ -1084,6 +1157,10 @@ class GitHubReleaseChecker:
                     extras.append(f"attention={item.get('release_attention')}")
                 if item.get("repo_trend"):
                     extras.append(f"trend={item.get('repo_trend')}")
+                if self.assets and item.get("assets"):
+                    asset_text = self._assets_digest_text(item)
+                    if asset_text:
+                        extras.append(asset_text)
                 suffix = f" [{', '.join(extras)}]" if extras else ""
                 if status == "updated":
                     lines.append(

@@ -55,6 +55,7 @@ def main() -> None:
     check_cmd.add_argument("--config", help="Optional config path")
     check_cmd.add_argument("--state", help="Optional state path")
     check_cmd.add_argument("--repo", action="append", help="Override repo (repeatable)")
+    check_cmd.add_argument("--assets", action="store_true", help="Include release asset information in output")
     check_cmd.add_argument("--dry-run", action="store_true", help="Show what would be done without saving state")
 
     status_cmd = subparsers.add_parser("status", help="Show saved checker status")
@@ -67,6 +68,7 @@ def main() -> None:
     digest_cmd.add_argument("--state", help="Optional state path")
     digest_cmd.add_argument("--repo", action="append", help="Override repo (repeatable)")
     digest_cmd.add_argument("--check", action="store_true", help="Refresh before generating digest")
+    digest_cmd.add_argument("--assets", action="store_true", help="Include release asset information in output")
     digest_cmd.add_argument("--dry-run", action="store_true", help="Show what would be done without saving state")
 
     args = parser.parse_args()
@@ -79,6 +81,7 @@ def main() -> None:
         state_path=args.state if hasattr(args, "state") else None,
         repo_overrides=args.repo if hasattr(args, "repo") else None,
         dry_run=args.dry_run if hasattr(args, "dry_run") else False,
+        assets=args.assets if hasattr(args, "assets") else False,
     )
 
     if args.command == "repos":
